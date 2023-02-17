@@ -7,7 +7,9 @@
 #### Section 1: Intro: Cheating our way past the transistor -- 0.5 weeks
 - So about those transistors -- Course overview. Describe how FPGAs are buildable using transistors, and that ICs are just collections of transistors in a nice reliable package. Understand the LUTs and stuff. Talk briefly about the theory of transistors, but all projects must build on each other so we can’t build one.
 - Emulation -- Building on real hardware limits the reach of this course. Using something like Verilator will allow anyone with a computer to play.
-[Theory of Transistors and Other Semiconductor Devices](https://www.vanderbilt.edu/AnS/physics/brau/H182/Theory%20of%20Transistors.pdf)
+| Resource  | 
+| ------------- | 
+| [Theory of Transistors and Other Semiconductor Devices](https://www.vanderbilt.edu/AnS/physics/brau/H182/Theory%20of%20Transistors.pdf)|
 
 #### Section 2: Bringup: What language is hardware coded in? -- 0.5 weeks
 - Blinking an LED(Verilog, 10) -- Your first little program! Getting the simulator working. Learning Verilog.
