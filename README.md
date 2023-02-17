@@ -12,6 +12,7 @@
 | Resource                                                                                                                                |
 | --------------------------------------------------------------------------------------------------------------------------------------- |
 | [Theory of Transistors and Other Semiconductor Devices](https://www.vanderbilt.edu/AnS/physics/brau/H182/Theory%20of%20Transistors.pdf) |
+| [Semiconductor Theory](https://ecstudiosystems.com/discover/textbooks/basic-electronics/diodes/semiconductor-theory/) |
 
 #### Section 2: Bringup: What language is hardware coded in? -- 0.5 weeks
 
