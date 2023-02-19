@@ -21,6 +21,11 @@
 - Blinking an LED(Verilog, 10) -- Your first little program! Getting the simulator working. Learning Verilog.
 - Building a UART(Verilog, 100) -- An intro chapter to Verilog, copy a real UART, introducing the concept of MMIO, though the serial port may be semihosting. Serial test echo program and led control.
 
+
+| Resource                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------- |
+| [Open source CPU/tools implementations](https://www.pulp-platform.org/implementation.html) |
+
 #### Section 3: Processor: What is a processor anyway? -- 3 weeks
 
 - Coding an assembler(Python, 500) -- Straightforward and boring, write in python. Happens in parallel with the CPU building. Teaches you ARM assembly. Initially outputs just binary files, but changed when you write a linker.
