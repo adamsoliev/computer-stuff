@@ -1,10 +1,10 @@
-#include <verilated.h>
 #include "Vnor_gate.h"
+#include <verilated.h>
 
 int main(int argc, char **argv) {
     Verilated::commandArgs(argc, argv);
 
-    Vnor_gate* top = new Vnor_gate;
+    Vnor_gate *top = new Vnor_gate;
 
     top->a = 0;
     top->b = 0;
