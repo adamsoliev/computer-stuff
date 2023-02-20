@@ -24,6 +24,7 @@
 
 | Resource                                                                                                                                |
 | --------------------------------------------------------------------------------------------------------------------------------------- |
+| [FPGA Development flow](https://www.youtube.com/watch?v=JNtI0uCDfow&t=3s) |
 | [Open source CPU/tools implementations](https://www.pulp-platform.org/implementation.html) |
 
 #### Section 3: Processor: What is a processor anyway? -- 3 weeks
