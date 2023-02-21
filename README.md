@@ -24,8 +24,10 @@
 
 | Resource                                                                                                                                |
 | --------------------------------------------------------------------------------------------------------------------------------------- |
+| [Verilog overview](https://left.engr.usu.edu/courses/3700/lectures/Verilog_review/Verilog_review.pdf) |
 | [FPGA Development flow](https://www.youtube.com/watch?v=JNtI0uCDfow&t=3s) |
 | [Open source CPU/tools implementations](https://www.pulp-platform.org/implementation.html) |
+| [UART](https://www.analog.com/en/analog-dialogue/articles/uart-a-hardware-communication-protocol.html) |
 
 #### Section 3: Processor: What is a processor anyway? -- 3 weeks
 
