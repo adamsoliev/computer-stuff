@@ -14,14 +14,14 @@ module uart (
 rx irx(
     .clk(clk),
     .rst(rst),
-    .data(out_data),
+    .rx_data(out_data),
     .rxd(rxd)
 );
 
 tx itx(
     .clk(clk),
     .rst(rst),
-    .data(in_data),
+    .tx_data(in_data),
     .txd(txd)
 );
 endmodule
@@ -32,22 +32,22 @@ endmodule
 module rx (
     input wire clk,
     input wire rst,
-    output wire [7:0] data,
+    output wire [7:0] rx_data,
     input wire rxd
 );
 
-reg [7:0] data_reg = 0;
-reg rxd_reg = 1;
+reg [7:0] rx_data_reg = 0;
+// reg rxd_reg = 1;
+// reg [3:0] bit_pos = 0;
 
-assign data = data_reg;
+assign rx_data = rx_data_reg;
 
 always @(posedge clk) begin
     if (rst) begin
-        data_reg <= 0;
-        rxd_reg <= 1;
+        rx_data_reg <= 0;
+        // bit_pos <= 0;
+        // rxd_reg <= 1;
     end else begin
-        rxd_reg <= rxd; // receive a bit 
-        data_reg <= {rxd_reg, data_reg[7:1]};
     end
 end
 endmodule
@@ -58,29 +58,43 @@ endmodule
 module tx (
     input wire clk,
     input wire rst,
-    input wire [7:0] data,
+    input wire [7:0] tx_data,
     output wire txd
 );
 
-reg txd_reg = 1;
-reg [7:0] data_reg = 0;
-reg [3:0] bit_cnt = 0;
+reg txd_reg;
+reg [7:0] tx_data_reg;
+reg [3:0] count;
 
 assign txd = txd_reg;
 
 always @(posedge clk) begin
     if (rst) begin
-        txd_reg <= 1;
-        data_reg <= 0;
-        bit_cnt <= 0;
+        $display("================ Reset ================");
+        count <= 0;
+        tx_data_reg <= 0;
+        txd_reg <= 0;
     end else begin
-        if (bit_cnt == 0) begin
-            data_reg <= data;
+        $display("================ Normal ================");
+        if (count == 0) begin
+            $display("A");
+            tx_data_reg <= tx_data;
+            count <= count + 1;
+        end else if (count < 9) begin
+            $display("B");
+            tx_data_reg <= {1'b0, tx_data_reg[7:1]};
+            txd_reg <= tx_data_reg[0];
+            count <= count + 1;
+        end else begin
+            $display("C");
+            count <= 0;
+            tx_data_reg <= tx_data;
             txd_reg <= 0;
         end
-        {data_reg, txd_reg} <= {1'b0, data_reg}; // send a bit 
-        bit_cnt <= bit_cnt + 1;
     end
+    $display("[TX] tx_data_reg = %0b, count = %0d, txd_reg = %0b", tx_data_reg, count, txd_reg);
+    $display("[TX] tx_data     = %0b", tx_data);
+
 end
 
 endmodule
