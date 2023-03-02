@@ -8,7 +8,207 @@ import subprocess
 from enum import Enum
 import struct
 
+
+class Funct7(Enum):
+    ADD = 0b0000000
+    SUB = 0b0100000
+
+
+class Funct3(Enum):
+    JALR = BEQ = LB = SB = ADDI = ADD = SUB = FENCE = ECALL = EBREAK = 0b000
+    BNE = LH = SH = SLLI = SLL = 0b001
+    BLT    = 0b100
+    BGE    = 0b101
+    BLTU   = 0b110
+    BGEU   = 0b111
+    LW     = 0b010
+    LBU    = 0b100
+    LHU    = 0b101
+    SW     = 0b010
+    SLTI   = 0b010
+    SLTIU  = 0b011
+    XORI   = 0b100
+    ORI    = 0b110
+    ANDI   = 0b111
+    SRLI   = 0b101
+    SRAI   = 0b101
+    SLT    = 0b010
+    SLTU   = 0b011
+    XOR    = 0b100
+    SRL    = 0b101
+    SRA    = 0b101
+    OR     = 0b110
+    AND    = 0b111
+
+class OP(Enum):
+    LUI = 0b0110111
+    AUIPC = 0b0010111
+    JAL = 0b1101111
+    JALR = 0b1100111
+    BRANCH = 0b1100011
+    LOAD = 0b0000011
+    STORE = 0b0100011
+    OP_IMM = 0b0010011
+    OP = 0b0110011
+    MISC_MEM = 0b0001111
+    SYSTEM = 0b1110011
+
+
+class Type(Enum):
+    R = 0
+    I = 1
+    S = 2
+    U = 3
+    B = 4
+    J = 5
+    OTHER = 6
+
+    def findType(op):
+        if (op in [OP.OP]):
+            return Type.R
+        if (op in [OP.JALR, OP.LOAD, OP.OP_IMM]):
+            return Type.I
+        if (op in [OP.STORE]):
+            return Type.S
+        if (op in [OP.LUI, OP.AUIPC]):
+            return Type.U
+        if (op in [OP.BRANCH]):
+            return Type.B
+        if (op in [OP.JAL]):
+            return Type.J
+        if (op in [OP.MISC_MEM, OP.SYSTEM]):
+            return Type.OTHER
+
+
+regnames = ["x0", "ra", "sp", "gp", "tp"] + ["t%d" % i for i in range(0, 3)] + ["s0", "s1"] + [
+    "a%d" % i for i in range(0, 8)] + ["s%d" % i for i in range(2, 12)] + ["t%d" % i for i in range(3, 7)] + ["PC"]
+
+memory = None
+PC = 32
+
+
+class Regfile:
+    def __init__(self):
+        self.regs = [0] * 33
+
+    def __getitem__(self, key):  # __and__ enable get/set via []
+        return self.regs[key]
+
+    def __setitem__(self, key, value):
+        if (key == 0):
+            return
+        self.regs[key] = value & 0xFFFFFFFF  # mask off bits beyond 32
+
+
+def init():
+    global memory, regfile
+    # 16kb memory
+    memory = b'\x00' * 0x4000
+    regfile = Regfile()
+
+
+def load(addr, data):
+    global memory
+    addr -= 0x80000000
+    assert addr >= 0 and addr < len(memory)
+    memory = memory[:addr] + data + memory[addr + len(data):]
+
+
+def readelf(args):
+    subprocess.call(args)
+
+
+def fetch(addr):
+    assert addr >= 0 and addr < len(memory)
+    return struct.unpack("<I", memory[addr:addr + 4])[0]
+
+
+def extractBits(instr, s, e):
+    """
+        imagine you have 32-bit int. how do you extract 5-10th bits?
+            mask:
+                generate 100000 (note 5 0s) and then 011111 (note 5 1s)
+                         1 << 5 (s - e + 1)          (100000) - 1
+            apply:
+                int >> 5 (= shift the int to the right by 5 to ignore the first 5 bits that we dont care about)
+                int & mask (= ignoring bits beyong 10th bit while keeping 5-10th)
+    """
+    result = (instr >> e) & ((1 << (s - e + 1)) - 1)
+    return result
+
+
+def execute():
+    global PC
+    regfile[PC] -= 0x80000000
+    for i in range(10):
+        instr = fetch(regfile[PC])
+        # *** Decode ***
+        op = OP(extractBits(instr, 6, 0))
+        type = Type.findType(op)
+        if (type == Type.R):
+            pass
+        elif (type == Type.I):
+            funct3 = Funct3(extractBits(instr, 14, 12))
+            rs1 = extractBits(instr, 19, 15)
+            imm = extractBits(instr, 31, 20)
+            print(funct3, regnames[rs1], imm)
+
+        elif (type == Type.S):
+            pass
+        elif (type == Type.U):
+            pass
+        elif (type == Type.B):
+            pass
+        elif (type == Type.J):
+            rd = extractBits(instr, 11, 7)
+            imm = extractBits(instr, 31, 12)
+        elif (type == Type.OTHER):
+            pass
+
+        print("{: <10} {: <2} {: <10} {: <10}".format(
+            hex(instr), "->", op, type))
+
+        # move PC
+        regfile[PC] += 0x4
+
+    """
+    regfile[PC] points to the next instr
+        // fetch next instr
+        // process
+    """
+    return False
+
+
+def tests():
+    for x in glob.glob("/home/adam/dev/riscv-tests/isa/rv32ui-p-add"):
+        if (x.endswith('.dump')):
+            continue
+        with open(x, 'rb') as f:
+            # readelf(["readelf", x, "-e"])
+            print("test", x)
+            init()
+            elffile = ELFFile(f)
+            for segment in elffile.iter_segments():
+                if (segment.header.p_paddr < 0x80000000):
+                    continue
+                load(segment.header.p_paddr, segment.data())
+                # print(segment.header.p_paddr, binascii.hexlify(segment.data()))
+            regfile[PC] = 0x80000000
+            instrcnt = 0
+            while execute():
+                instrcnt += 1
+            print("run %d instructions" % instrcnt)
+
+
+def main():
+    tests()
+
+
+if __name__ == '__main__':
+    main()
+
 """
+    Object File Format
     -----------------------
             ELF header
     -----------------------
@@ -74,10 +274,10 @@ http://csl.snu.ac.kr/courses/4190.307/2020-1/riscv-user-isa.pdf
 """
 
 """
+RV32I Base Instruction Set - 130
+
 RISC-V Instruction-Set
 http://blog.translusion.com/images/posts/RISC-V-cheatsheet-RV32I-4-3.pdf
-
-RV32I Base Instruction Set - 130
 
 Figure 2.2: RISC-V base instruction formats
 ------------------------------------------------------------------------------------------
@@ -98,7 +298,7 @@ imm[20] imm[10:1] imm[11] imm[19:12]              |       rd          | opcode |
 """
 
 """
-                        RV32I Base Instruction Set
+                            RV32I Base Instruction Set
 -------------------------------------------------------------------------------------------------
 imm[31:12]                                                      rd              0110111    LUI
 imm[31:12]                                                      rd              0010111    AUIPC
@@ -142,136 +342,3 @@ fm       pred        succ       rs1         000                 rd              
 000000000001                   00000        000                 00000           1110011    EBREAK
 -------------------------------------------------------------------------------------------------
 """
-
-
-class Funct7(Enum):
-    ADD = 0b0000000
-    SUB = 0b0100000
-
-
-class Funct3(Enum):
-    ADD = SUB = 0b000
-
-
-class OP(Enum):
-    LUI = 0b0110111
-    AUIPC = 0b0010111
-    JAL = 0b1101111
-    JALR = 0b1100111
-    BRANCH = 0b1100011
-    LOAD = 0b0000011
-    STORE = 0b0100011
-    OP_IMM = 0b0010011
-    OP = 0b0110011
-    MISC_MEM = 0b0001111
-    SYSTEM = 0b1110011
-
-
-regnames = ["x0", "ra", "sp", "gp", "tp"] + ["t%d" % i for i in range(0, 3)] + ["s0", "s1"] + [
-    "a%d" % i for i in range(0, 8)] + ["s%d" % i for i in range(2, 12)] + ["t%d" % i for i in range(3, 7)] + ["PC"]
-
-memory = None
-PC = 32
-
-
-class Regfile:
-    def __init__(self):
-        self.regs = [0] * 33
-
-    def __getitem__(self, key):  # __and__ enable get/set via []
-        return self.regs[key]
-
-    def __setitem__(self, key, value):
-        if (key == 0):
-            return
-        self.regs[key] = value & 0xFFFFFFFF  # mask off bits beyond 32
-
-
-def init():
-    global memory, regfile
-    # 16kb memory
-    memory = b'\x00' * 0x4000
-    regfile = Regfile()
-
-
-def load(addr, data):
-    global memory
-    addr -= 0x80000000
-    assert addr >= 0 and addr < len(memory)
-    memory = memory[:addr] + data + memory[addr + len(data):]
-
-
-def readelf(args):
-    subprocess.call(args)
-
-
-"""
-    process execution cycle
-        fetch
-        decode
-        execute
-
-1101111 00000 0000000000000000101
-JAL     rd    imm
-              5 (x5/t0)
-"""
-
-
-def fetch(addr):
-    assert addr >= 0 and addr < len(memory)
-    return struct.unpack("<I", memory[addr:addr + 4])[0]
-
-
-def extractBits(instr, s, e):
-    result = (instr >> e) & ((1 << (s - e + 1)) - 1)
-    return result
-
-
-def execute():
-    global PC
-    regfile[PC] -= 0x80000000
-    for i in range(20):
-        instr = fetch(regfile[PC])
-        # *** Decode ***
-        op = OP(extractBits(instr, 6, 0))
-        print("{: <10} {: <2} {: <10}".format(
-            hex(instr), "->", op))
-
-        # move PC
-        regfile[PC] += 0x4
-
-    """
-    regfile[PC] points to the next instr
-        // fetch next instr
-        // process
-    """
-    return False
-
-
-def tests():
-    for x in glob.glob("/home/adam/dev/riscv-tests/isa/rv32ui-p-add"):
-        if (x.endswith('.dump')):
-            continue
-        with open(x, 'rb') as f:
-            # readelf(["readelf", x, "-e"])
-            print("test", x)
-            init()
-            elffile = ELFFile(f)
-            for segment in elffile.iter_segments():
-                if (segment.header.p_paddr < 0x80000000):
-                    continue
-                load(segment.header.p_paddr, segment.data())
-                # print(segment.header.p_paddr, binascii.hexlify(segment.data()))
-            regfile[PC] = 0x80000000
-            instrcnt = 0
-            while execute():
-                instrcnt += 1
-            print("run %d instructions" % instrcnt)
-
-
-def main():
-    tests()
-
-
-if __name__ == '__main__':
-    main()
