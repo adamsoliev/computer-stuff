@@ -74,9 +74,7 @@ def concat(a, b):
 
 
 def instruction_type(opcode):
-    if ((opcode == 0x37)
-        or (opcode == 0x17)
-            or (opcode == 0x6F)):
+    if ((opcode == 0x37) or (opcode == 0x17) or (opcode == 0x6F)):
         inst_type = 'U'
     elif opcode == 0x63:
         inst_type = 'B'
@@ -273,28 +271,13 @@ def execute():
     global PC
     regfile[PC] -= 0x80000000
     for i in range(10):
+        # *** Fetch ***
         instr = fetch(regfile[PC])
         # *** Decode ***
         op = OP(extractBits(instr, 6, 0))
-        type = Type.findType(op)
-        if (type == Type.R):
-            instruction_parsing('R', instr)
-        elif (type == Type.I):
-            instruction_parsing('I', instr)
-        elif (type == Type.S):
-            instruction_parsing('S', instr)
-        elif (type == Type.U):
-            instruction_parsing('U', instr)
-        elif (type == Type.B):
-            instruction_parsing('B', instr)
-        elif (type == Type.J):
-            # instruction_parsing('J', instr)
-            pass
-        elif (type == Type.OTHER):
-            pass
-
-        # print("{: <10} {: <2} {: <10} {: <10}".format(
-        #     hex(instr), "->", op, type))
+        if (op != OP.SYSTEM):
+            type = instruction_type(op.value)
+            instruction_parsing(type, instr)
 
         # move PC
         regfile[PC] += 0x4
