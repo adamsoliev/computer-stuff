@@ -9,7 +9,7 @@ from enum import Enum
 import struct
 
 
-INSTR = {"lui":  {"opcode": 0b0110111, "type": "U", "funct3": 0xF},
+INSTR = {"lui":   {"opcode": 0b0110111, "type": "U", "funct3": 0xF},
          "auipc": {"opcode": 0b0010111, "type": "U", "funct3": 0xF},
          "jal":   {"opcode": 0b1101111, "type": "U", "funct3": 0xF},
 
@@ -68,7 +68,15 @@ B_IMM41_MASK = 0xF00
 B_IMM7_MASK = 0x80
 
 
+def find_instr_name(opcode, instr_type, funct3):
+    for parent_key, inner_dict in INSTR.items():
+        if inner_dict["opcode"] == opcode and inner_dict["type"] == instr_type and inner_dict["funct3"] == funct3:
+            return parent_key
+    return None  # Return None if no match is found
+
 # Concatenate two binary numbers
+
+
 def concat(a, b):
     return int(f"{a}{b}")
 
@@ -139,33 +147,43 @@ def b_decoding(inst):
     return imm, rs2, rs1, funct3, opcode
 
 
-def instruction_parsing(inst_type, tested_instruction):
-    # print("Instruction: " + str(hex(tested_instruction)))
+def instruction_parsing(inst_type, instruction):
+    # print("Instruction: " + str(hex(instruction)))
     # print("Type: " + inst_type)
     if inst_type == 'U':
-        [imm, rd, opcode] = u_decoding(tested_instruction)
-        print('[imm, rd, opcode]')
-        print('[{}]'.format(', '.join(hex(x) for x in [imm, rd, opcode])))
+        [imm, rd, opcode] = u_decoding(instruction)
+        print("{: <10} {: <10}".format(instruction,
+              find_instr_name(opcode, inst_type, 0xF)))
+        # print('[imm, rd, opcode]')
+        # print('[{}]'.format(', '.join(hex(x) for x in [imm, rd, opcode])))
     elif inst_type == 'I':
-        [imm, rs1, funct3, rd, opcode] = i_decoding(tested_instruction)
-        print('[imm, rs1, funct3, rd, opcode]')
-        print('[{}]'.format(', '.join(hex(x)
-              for x in [imm, rs1, funct3, rd, opcode])))
+        [imm, rs1, funct3, rd, opcode] = i_decoding(instruction)
+        print("{: <10} {: <10}".format(instruction,
+              find_instr_name(opcode, inst_type, funct3)))
+        # print('[imm, rs1, funct3, rd, opcode]')
+        # print('[{}]'.format(', '.join(hex(x)
+        #       for x in [imm, rs1, funct3, rd, opcode])))
     elif inst_type == 'R':
-        [funct7, rs2, rs1, funct3, rd, opcode] = r_decoding(tested_instruction)
-        print('[funct7, rs2, rs1, funct3, rd, opcode]')
-        print('[{}]'.format(', '.join(hex(x)
-              for x in [funct7, rs2, rs1, funct3, rd, opcode])))
+        [funct7, rs2, rs1, funct3, rd, opcode] = r_decoding(instruction)
+        print("{: <10} {: <10}".format(instruction,
+              find_instr_name(opcode, inst_type, funct3)))
+        # print('[funct7, rs2, rs1, funct3, rd, opcode]')
+        # print('[{}]'.format(', '.join(hex(x)
+        #       for x in [funct7, rs2, rs1, funct3, rd, opcode])))
     elif inst_type == 'S':
-        [imm, rs2, rs1, funct3, opcode] = s_decoding(tested_instruction)
-        print('[imm, rs2, rs1, funct3, opcode]')
-        print('[{}]'.format(', '.join(hex(x)
-              for x in [imm, rs2, rs1, funct3, opcode])))
+        [imm, rs2, rs1, funct3, opcode] = s_decoding(instruction)
+        print("{: <10} {: <10}".format(instruction,
+              find_instr_name(opcode, inst_type, funct3)))
+        # print('[imm, rs2, rs1, funct3, opcode]')
+        # print('[{}]'.format(', '.join(hex(x)
+        #       for x in [imm, rs2, rs1, funct3, opcode])))
     elif inst_type == 'B':
-        [imm, rs2, rs1, funct3, opcode] = b_decoding(tested_instruction)
-        print('[imm, rs2, rs1, funct3, opcode]')
-        print('[{}]'.format(', '.join(hex(x)
-              for x in [imm, rs2, rs1, funct3, opcode])))
+        [imm, rs2, rs1, funct3, opcode] = b_decoding(instruction)
+        print("{: <10} {: <10}".format(instruction,
+              find_instr_name(opcode, inst_type, funct3)))
+        # print('[imm, rs2, rs1, funct3, opcode]')
+        # print('[{}]'.format(', '.join(hex(x)
+        #       for x in [imm, rs2, rs1, funct3, opcode])))
     else:
         raise Exception("Not decoded yet")
 
@@ -182,32 +200,6 @@ class OP(Enum):
     OP = 0b0110011
     MISC_MEM = 0b0001111
     SYSTEM = 0b1110011
-
-
-class Type(Enum):
-    R = 0
-    I = 1
-    S = 2
-    U = 3
-    B = 4
-    J = 5
-    OTHER = 6
-
-    def findType(op):
-        if (op in [OP.OP]):
-            return Type.R
-        if (op in [OP.JALR, OP.LOAD, OP.OP_IMM]):
-            return Type.I
-        if (op in [OP.STORE]):
-            return Type.S
-        if (op in [OP.LUI, OP.AUIPC]):
-            return Type.U
-        if (op in [OP.BRANCH]):
-            return Type.B
-        if (op in [OP.JAL]):
-            return Type.J
-        if (op in [OP.MISC_MEM, OP.SYSTEM]):
-            return Type.OTHER
 
 
 regnames = ["x0", "ra", "sp", "gp", "tp"] + ["t%d" % i for i in range(0, 3)] + ["s0", "s1"] + [
