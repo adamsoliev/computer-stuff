@@ -9,36 +9,168 @@ from enum import Enum
 import struct
 
 
-class Funct7(Enum):
-    ADD = 0b0000000
-    SUB = 0b0100000
+INSTR = {"lui":  {"opcode": 0b0110111, "type": "U", "funct3": 0xF},
+         "auipc": {"opcode": 0b0010111, "type": "U", "funct3": 0xF},
+         "jal":   {"opcode": 0b1101111, "type": "U", "funct3": 0xF},
+
+         "jalr":  {"opcode": 0b1100111, "type": "I", "funct3": 0x0},
+
+         "beq":   {"opcode": 0b1100011, "type": "B", "funct3": 0x0},
+         "bne":   {"opcode": 0b1100011, "type": "B", "funct3": 0x1},
+         "blt":   {"opcode": 0b1100011, "type": "B", "funct3": 0x4},
+         "bge":   {"opcode": 0b1100011, "type": "B", "funct3": 0x5},
+         "bltu":  {"opcode": 0b1100011, "type": "B", "funct3": 0x6},
+         "bgeu":  {"opcode": 0b1100011, "type": "B", "funct3": 0x7},
+
+         "lb":    {"opcode": 0b0000011, "type": "I", "funct3": 0x0},
+         "lh":    {"opcode": 0b0000011, "type": "I", "funct3": 0x1},
+         "lw":    {"opcode": 0b0000011, "type": "I", "funct3": 0x2},
+         "lbu":   {"opcode": 0b0000011, "type": "I", "funct3": 0x4},
+
+         "lhu":   {"opcode": 0b0000011, "type": "I", "funct3": 0x5},
+         "sb":    {"opcode": 0b0100011, "type": "S", "funct3": 0x0},
+         "sh":    {"opcode": 0b0100011, "type": "S", "funct3": 0x1},
+
+         "sw":    {"opcode": 0b0100011, "type": "S", "funct3": 0x2},
+         "addi":  {"opcode": 0b0010011, "type": "I", "funct3": 0x0},
+         "slti":  {"opcode": 0b0010011, "type": "I", "funct3": 0x2},
+         "sltiu": {"opcode": 0b0010011, "type": "I", "funct3": 0x3},
+         "xori":  {"opcode": 0b0010011, "type": "I", "funct3": 0x4},
+         "ori":   {"opcode": 0b0010011, "type": "I", "funct3": 0x6},
+         "andi":  {"opcode": 0b0010011, "type": "I", "funct3": 0x7},
+         "slli":  {"opcode": 0b0010011, "type": "I", "funct3": 0x1},
+         "srli":  {"opcode": 0b0010011, "type": "I", "funct3": 0x5},
+         "srai":  {"opcode": 0b0010011, "type": "I", "funct3": 0x5},
+
+         "add":   {"opcode": 0b0110011, "type": "R", "funct3": 0x0},
+         "sub":   {"opcode": 0b0110011, "type": "R", "funct3": 0x0},
+         "sll":   {"opcode": 0b0110011, "type": "R", "funct3": 0x1},
+         "slt":   {"opcode": 0b0110011, "type": "R", "funct3": 0x2},
+         "sltu":  {"opcode": 0b0110011, "type": "R", "funct3": 0x3},
+         "xor":   {"opcode": 0b0110011, "type": "R", "funct3": 0x4},
+         "srl":   {"opcode": 0b0110011, "type": "R", "funct3": 0x5},
+         "sra":   {"opcode": 0b0110011, "type": "R", "funct3": 0x5},
+         "or":    {"opcode": 0b0110011, "type": "R", "funct3": 0x6},
+         "and":   {"opcode": 0b0110011, "type": "R", "funct3": 0x7}}
+# Masks
+OPCODE_MASK = 0x7F
+U_IMM_MASK = 0xFFFFF000
+I_IMM_MASK = 0xFFF00000
+RS2_MASK = 0x1F00000
+RS1_MASK = 0xF8000
+FUNCT3_MASK = 0x7000
+FUNCT7_MASK = 0xFE000000
+RD_MASK = 0xF80
+S_IMM115_MASK = 0xFE000000
+S_IMM40_MASK = 0xF80
+B_IMM105_MASK = 0x7E000000
+B_IMM41_MASK = 0xF00
+B_IMM7_MASK = 0x80
 
 
-class Funct3(Enum):
-    JALR = BEQ = LB = SB = ADDI = ADD = SUB = FENCE = ECALL = EBREAK = 0b000
-    BNE = LH = SH = SLLI = SLL = 0b001
-    BLT    = 0b100
-    BGE    = 0b101
-    BLTU   = 0b110
-    BGEU   = 0b111
-    LW     = 0b010
-    LBU    = 0b100
-    LHU    = 0b101
-    SW     = 0b010
-    SLTI   = 0b010
-    SLTIU  = 0b011
-    XORI   = 0b100
-    ORI    = 0b110
-    ANDI   = 0b111
-    SRLI   = 0b101
-    SRAI   = 0b101
-    SLT    = 0b010
-    SLTU   = 0b011
-    XOR    = 0b100
-    SRL    = 0b101
-    SRA    = 0b101
-    OR     = 0b110
-    AND    = 0b111
+# Concatenate two binary numbers
+def concat(a, b):
+    return int(f"{a}{b}")
+
+
+def instruction_type(opcode):
+    if ((opcode == 0x37)
+        or (opcode == 0x17)
+            or (opcode == 0x6F)):
+        inst_type = 'U'
+    elif opcode == 0x63:
+        inst_type = 'B'
+    elif opcode == 0x33:
+        inst_type = 'R'
+    elif opcode == 0x23:
+        inst_type = 'S'
+    elif opcode == 0x13:
+        inst_type = 'I'
+    else:
+        raise Exception('Unknown type with opcode = '+str(hex(opcode)))
+    return inst_type
+
+
+def u_decoding(inst):
+    imm = (inst & U_IMM_MASK) >> 12
+    rd = (inst & RD_MASK) >> 7
+    opcode = inst & OPCODE_MASK
+    return imm, rd, opcode
+
+
+def i_decoding(inst):
+    imm = (inst & I_IMM_MASK) >> 20
+    rs1 = (inst & RS1_MASK) >> 15
+    funct3 = (inst & FUNCT3_MASK) >> 12
+    rd = (inst & RD_MASK) >> 7
+    opcode = inst & OPCODE_MASK
+    return imm, rs1, funct3, rd, opcode
+
+
+def r_decoding(inst):
+    funct7 = (inst & FUNCT7_MASK) >> 25
+    rs2 = (inst & RS2_MASK) >> 20
+    rs1 = (inst & RS1_MASK) >> 15
+    funct3 = (inst & FUNCT3_MASK) >> 12
+    rd = (inst & RD_MASK) >> 7
+    opcode = inst & OPCODE_MASK
+    return funct7, rs2, rs1, funct3, rd, opcode
+
+
+def s_decoding(inst):
+    imm11 = (inst & S_IMM115_MASK) >> 25
+    rs2 = (inst & RS2_MASK) >> 20
+    rs1 = (inst & RS1_MASK) >> 15
+    funct3 = (inst & FUNCT3_MASK) >> 12
+    imm40 = (inst & S_IMM40_MASK) >> 7
+    opcode = inst & OPCODE_MASK
+    imm = concat(imm11, imm40)
+    return imm, rs2, rs1, funct3, opcode
+
+
+def b_decoding(inst):
+    imm12 = inst >> 31
+    imm10 = (inst & B_IMM105_MASK) >> 25
+    rs2 = (inst & RS2_MASK) >> 20
+    rs1 = (inst & RS1_MASK) >> 15
+    funct3 = (inst & FUNCT3_MASK) >> 12
+    imm4 = (inst & B_IMM41_MASK) >> 8
+    imm11 = (inst & B_IMM7_MASK) >> 7
+    opcode = inst & OPCODE_MASK
+    imm = concat(imm12, concat(imm11, concat(imm10, imm4)))*2
+    return imm, rs2, rs1, funct3, opcode
+
+
+def instruction_parsing(inst_type, tested_instruction):
+    # print("Instruction: " + str(hex(tested_instruction)))
+    # print("Type: " + inst_type)
+    if inst_type == 'U':
+        [imm, rd, opcode] = u_decoding(tested_instruction)
+        print('[imm, rd, opcode]')
+        print('[{}]'.format(', '.join(hex(x) for x in [imm, rd, opcode])))
+    elif inst_type == 'I':
+        [imm, rs1, funct3, rd, opcode] = i_decoding(tested_instruction)
+        print('[imm, rs1, funct3, rd, opcode]')
+        print('[{}]'.format(', '.join(hex(x)
+              for x in [imm, rs1, funct3, rd, opcode])))
+    elif inst_type == 'R':
+        [funct7, rs2, rs1, funct3, rd, opcode] = r_decoding(tested_instruction)
+        print('[funct7, rs2, rs1, funct3, rd, opcode]')
+        print('[{}]'.format(', '.join(hex(x)
+              for x in [funct7, rs2, rs1, funct3, rd, opcode])))
+    elif inst_type == 'S':
+        [imm, rs2, rs1, funct3, opcode] = s_decoding(tested_instruction)
+        print('[imm, rs2, rs1, funct3, opcode]')
+        print('[{}]'.format(', '.join(hex(x)
+              for x in [imm, rs2, rs1, funct3, opcode])))
+    elif inst_type == 'B':
+        [imm, rs2, rs1, funct3, opcode] = b_decoding(tested_instruction)
+        print('[imm, rs2, rs1, funct3, opcode]')
+        print('[{}]'.format(', '.join(hex(x)
+              for x in [imm, rs2, rs1, funct3, opcode])))
+    else:
+        raise Exception("Not decoded yet")
+
 
 class OP(Enum):
     LUI = 0b0110111
@@ -146,27 +278,23 @@ def execute():
         op = OP(extractBits(instr, 6, 0))
         type = Type.findType(op)
         if (type == Type.R):
-            pass
+            instruction_parsing('R', instr)
         elif (type == Type.I):
-            funct3 = Funct3(extractBits(instr, 14, 12))
-            rs1 = extractBits(instr, 19, 15)
-            imm = extractBits(instr, 31, 20)
-            print(funct3, regnames[rs1], imm)
-
+            instruction_parsing('I', instr)
         elif (type == Type.S):
-            pass
+            instruction_parsing('S', instr)
         elif (type == Type.U):
-            pass
+            instruction_parsing('U', instr)
         elif (type == Type.B):
-            pass
+            instruction_parsing('B', instr)
         elif (type == Type.J):
-            rd = extractBits(instr, 11, 7)
-            imm = extractBits(instr, 31, 12)
+            # instruction_parsing('J', instr)
+            pass
         elif (type == Type.OTHER):
             pass
 
-        print("{: <10} {: <2} {: <10} {: <10}".format(
-            hex(instr), "->", op, type))
+        # print("{: <10} {: <2} {: <10} {: <10}".format(
+        #     hex(instr), "->", op, type))
 
         # move PC
         regfile[PC] += 0x4
