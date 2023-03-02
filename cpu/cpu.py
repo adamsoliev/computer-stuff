@@ -97,6 +97,52 @@ imm[20] imm[10:1] imm[11] imm[19:12]              |       rd          | opcode |
 ------------------------------------------------------------------------------------------
 """
 
+"""
+                        RV32I Base Instruction Set
+-------------------------------------------------------------------------------------------------
+imm[31:12]                                                      rd              0110111    LUI
+imm[31:12]                                                      rd              0010111    AUIPC
+imm[20|10:1|11|19:12]                                           rd              1101111    JAL
+imm[11:0]                       rs1         000                 rd              1100111    JALR
+imm[12|10:5]        rs2         rs1         000            imm[4:1|11]          1100011    BEQ
+imm[12|10:5]        rs2         rs1         001            imm[4:1|11]          1100011    BNE
+imm[12|10:5]        rs2         rs1         100            imm[4:1|11]          1100011    BLT
+imm[12|10:5]        rs2         rs1         101            imm[4:1|11]          1100011    BGE
+imm[12|10:5]        rs2         rs1         110            imm[4:1|11]          1100011    BLTU
+imm[12|10:5]        rs2         rs1         111            imm[4:1|11]          1100011    BGEU
+imm[11:0]                       rs1         000                 rd              0000011    LB
+imm[11:0]                       rs1         001                 rd              0000011    LH
+imm[11:0]                       rs1         010                 rd              0000011    LW
+imm[11:0]                       rs1         100                 rd              0000011    LBU
+imm[11:0]                       rs1         101                 rd              0000011    LHU
+imm[11:5]           rs2         rs1         000              imm[4:0]           0100011    SB
+imm[11:5]           rs2         rs1         001              imm[4:0]           0100011    SH
+imm[11:5]           rs2         rs1         010              imm[4:0]           0100011    SW
+imm[11:0]                       rs1         000                 rd              0010011    ADDI
+imm[11:0]                       rs1         010                 rd              0010011    SLTI
+imm[11:0]                       rs1         011                 rd              0010011    SLTIU
+imm[11:0]                       rs1         100                 rd              0010011    XORI
+imm[11:0]                       rs1         110                 rd              0010011    ORI
+imm[11:0]                       rs1         111                 rd              0010011    ANDI
+0000000             shamt       rs1         001                 rd              0010011    SLLI
+0000000             shamt       rs1         101                 rd              0010011    SRLI
+0100000             shamt       rs1         101                 rd              0010011    SRAI
+0000000             rs2         rs1         000                 rd              0110011     ADD
+0100000             rs2         rs1         000                 rd              0110011    SUB
+0000000             rs2         rs1         001                 rd              0110011    SLL
+0000000             rs2         rs1         010                 rd              0110011    SLT
+0000000             rs2         rs1         011                 rd              0110011    SLTU
+0000000             rs2         rs1         100                 rd              0110011    XOR
+0000000             rs2         rs1         101                 rd              0110011    SRL
+0100000             rs2         rs1         101                 rd              0110011    SRA
+0000000             rs2         rs1         110                 rd              0110011    OR
+0000000             rs2         rs1         111                 rd              0110011    AND
+fm       pred        succ       rs1         000                 rd              0001111    FENCE
+000000000000                   00000        000                 00000           1110011    ECALL
+000000000001                   00000        000                 00000           1110011    EBREAK
+-------------------------------------------------------------------------------------------------
+"""
+
 
 class Funct7(Enum):
     ADD = 0b0000000
@@ -108,9 +154,17 @@ class Funct3(Enum):
 
 
 class OP(Enum):
-    ADD = SUB = 0b0110011
+    LUI = 0b0110111
+    AUIPC = 0b0010111
     JAL = 0b1101111
-    ECALL = 0b1110011
+    JALR = 0b1100111
+    BRANCH = 0b1100011
+    LOAD = 0b0000011
+    STORE = 0b0100011
+    OP_IMM = 0b0010011
+    OP = 0b0110011
+    MISC_MEM = 0b0001111
+    SYSTEM = 0b1110011
 
 
 regnames = ["x0", "ra", "sp", "gp", "tp"] + ["t%d" % i for i in range(0, 3)] + ["s0", "s1"] + [
@@ -165,8 +219,12 @@ JAL     rd    imm
 
 def fetch(addr):
     assert addr >= 0 and addr < len(memory)
-    # print(memory[addr:addr + 4].hex())
-    return struct.unpack(">I", memory[addr:addr + 4])[0]
+    return struct.unpack("<I", memory[addr:addr + 4])[0]
+
+
+def extractBits(instr, s, e):
+    result = (instr >> e) & ((1 << (s - e + 1)) - 1)
+    return result
 
 
 def execute():
@@ -175,8 +233,9 @@ def execute():
     for i in range(20):
         instr = fetch(regfile[PC])
         # *** Decode ***
-        op = OP(instr >> 24)
-        print(op)
+        op = OP(extractBits(instr, 6, 0))
+        print("{: <10} {: <2} {: <10}".format(
+            hex(instr), "->", op))
 
         # move PC
         regfile[PC] += 0x4
