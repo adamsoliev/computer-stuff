@@ -93,7 +93,8 @@ def instruction_type(opcode):
         inst_type = 'R'
     elif opcode == 0x23:
         inst_type = 'S'
-    elif ((opcode == 0x13) or (opcode == 0x67)):
+    elif ((opcode == 0x13) or (opcode == 0x67) or (opcode == 0x0F)):
+        # 0x0F - fence
         inst_type = 'I'
     elif (opcode == 0x6F):
         inst_type = 'J'
@@ -264,7 +265,7 @@ def execute(type, instruction_elements):
 def process():
     global PC
     regfile[PC] -= 0x80000000
-    for i in range(20):
+    for i in range(421):
         # *** Fetch ***
         instr = fetch(regfile[PC])
         # *** Decode ***
@@ -272,7 +273,7 @@ def process():
         if (op != OP.SYSTEM):
             print(hex(instr))
             type = instruction_type(op.value)
-            print("{:<10} {:<2} {:<2}".format(hex(instr), "->", type))
+            print("{:<4} {:<10} {:<2} {:<2}".format(i, hex(instr), "->", type))
             intruction_elements = instruction_parsing(type, instr)
             execute(type, intruction_elements)
 
