@@ -52,6 +52,7 @@ INSTR = {"lui":   {"opcode": 0b0110111, "type": "U", "funct3": 0xF},
          "sra":   {"opcode": 0b0110011, "type": "R", "funct3": 0x5},
          "or":    {"opcode": 0b0110011, "type": "R", "funct3": 0x6},
          "and":   {"opcode": 0b0110011, "type": "R", "funct3": 0x7}}
+
 # Masks
 OPCODE_MASK = 0x7F
 U_IMM_MASK = 0xFFFFF000
@@ -66,6 +67,9 @@ S_IMM40_MASK = 0xF80
 B_IMM105_MASK = 0x7E000000
 B_IMM41_MASK = 0xF00
 B_IMM7_MASK = 0x80
+J_IMM1912_MASK = 0xFF000
+J_IMM11_MASK = 0x100000
+J_IMM101_MASK = 0x7FE00000
 
 
 def find_instr_name(opcode, instr_type, funct3):
@@ -74,15 +78,14 @@ def find_instr_name(opcode, instr_type, funct3):
             return parent_key
     return None  # Return None if no match is found
 
+
 # Concatenate two binary numbers
-
-
 def concat(a, b):
     return int(f"{a}{b}")
 
 
 def instruction_type(opcode):
-    if ((opcode == 0x37) or (opcode == 0x17) or (opcode == 0x6F)):
+    if ((opcode == 0x37) or (opcode == 0x17)):  # TODO: check if this needs to be changed
         inst_type = 'U'
     elif opcode == 0x63:
         inst_type = 'B'
@@ -90,8 +93,10 @@ def instruction_type(opcode):
         inst_type = 'R'
     elif opcode == 0x23:
         inst_type = 'S'
-    elif opcode == 0x13:
+    elif ((opcode == 0x13) or (opcode == 0x67)):
         inst_type = 'I'
+    elif (opcode == 0x6F):
+        inst_type = 'J'
     else:
         raise Exception('Unknown type with opcode = '+str(hex(opcode)))
     return inst_type
@@ -147,43 +152,29 @@ def b_decoding(inst):
     return imm, rs2, rs1, funct3, opcode
 
 
+def j_decoding(inst):
+    opcode = inst & OPCODE_MASK                 # 6 bits [0-6]
+    rd = (inst & RD_MASK) >> 7                  # 5 bits [7-11]
+    imm1912 = (inst & J_IMM1912_MASK) >> 12     # 8 bits [12-19]
+    imm11 = (inst & J_IMM11_MASK) >> 20         # 1 bit [20]
+    imm101 = (inst & J_IMM101_MASK) >> 21       # 10 bits [21-30]
+    imm12 = inst >> 31                          # 1 bit [31]
+    return imm12, imm101, imm11, imm1912, rd, opcode
+
+
 def instruction_parsing(inst_type, instruction):
-    # print("Instruction: " + str(hex(instruction)))
-    # print("Type: " + inst_type)
     if inst_type == 'U':
-        [imm, rd, opcode] = u_decoding(instruction)
-        print("{: <10} {: <10}".format(instruction,
-              find_instr_name(opcode, inst_type, 0xF)))
-        # print('[imm, rd, opcode]')
-        # print('[{}]'.format(', '.join(hex(x) for x in [imm, rd, opcode])))
+        return u_decoding(instruction)
     elif inst_type == 'I':
-        [imm, rs1, funct3, rd, opcode] = i_decoding(instruction)
-        print("{: <10} {: <10}".format(instruction,
-              find_instr_name(opcode, inst_type, funct3)))
-        # print('[imm, rs1, funct3, rd, opcode]')
-        # print('[{}]'.format(', '.join(hex(x)
-        #       for x in [imm, rs1, funct3, rd, opcode])))
+        return i_decoding(instruction)
     elif inst_type == 'R':
-        [funct7, rs2, rs1, funct3, rd, opcode] = r_decoding(instruction)
-        print("{: <10} {: <10}".format(instruction,
-              find_instr_name(opcode, inst_type, funct3)))
-        # print('[funct7, rs2, rs1, funct3, rd, opcode]')
-        # print('[{}]'.format(', '.join(hex(x)
-        #       for x in [funct7, rs2, rs1, funct3, rd, opcode])))
+        return r_decoding(instruction)
     elif inst_type == 'S':
-        [imm, rs2, rs1, funct3, opcode] = s_decoding(instruction)
-        print("{: <10} {: <10}".format(instruction,
-              find_instr_name(opcode, inst_type, funct3)))
-        # print('[imm, rs2, rs1, funct3, opcode]')
-        # print('[{}]'.format(', '.join(hex(x)
-        #       for x in [imm, rs2, rs1, funct3, opcode])))
+        return s_decoding(instruction)
     elif inst_type == 'B':
-        [imm, rs2, rs1, funct3, opcode] = b_decoding(instruction)
-        print("{: <10} {: <10}".format(instruction,
-              find_instr_name(opcode, inst_type, funct3)))
-        # print('[imm, rs2, rs1, funct3, opcode]')
-        # print('[{}]'.format(', '.join(hex(x)
-        #       for x in [imm, rs2, rs1, funct3, opcode])))
+        return b_decoding(instruction)
+    elif inst_type == 'J':
+        return j_decoding(instruction)
     else:
         raise Exception("Not decoded yet")
 
@@ -213,7 +204,7 @@ class Regfile:
     def __init__(self):
         self.regs = [0] * 33
 
-    def __getitem__(self, key):  # __and__ enable get/set via []
+    def __getitem__(self, key):  # __X__ enables get/set via []
         return self.regs[key]
 
     def __setitem__(self, key, value):
@@ -246,30 +237,44 @@ def fetch(addr):
 
 
 def extractBits(instr, s, e):
-    """
-        imagine you have 32-bit int. how do you extract 5-10th bits?
-            mask:
-                generate 100000 (note 5 0s) and then 011111 (note 5 1s)
-                         1 << 5 (s - e + 1)          (100000) - 1
-            apply:
-                int >> 5 (= shift the int to the right by 5 to ignore the first 5 bits that we dont care about)
-                int & mask (= ignoring bits beyong 10th bit while keeping 5-10th)
-    """
     result = (instr >> e) & ((1 << (s - e + 1)) - 1)
     return result
 
 
-def execute():
+# Executes a single instruction
+def execute(type, instruction_elements):
+    if (type == 'U'):
+        [imm, rd, opcode] = instruction_elements
+    elif (type == 'I'):
+        [imm, rs1, funct3, rd, opcode] = instruction_elements
+    elif (type == 'R'):
+        [funct7, rs2, rs1, funct3, rd, opcode] = instruction_elements
+    elif (type == 'S'):
+        [imm, rs2, rs1, funct3, opcode] = instruction_elements
+    elif (type == 'B'):
+        [imm, rs2, rs1, funct3, opcode] = instruction_elements
+    elif (type == 'J'):
+        [imm12, imm101, imm11, imm1912, rd, opcode] = instruction_elements
+        print(bin(imm12), bin(imm101), bin(imm11),
+              bin(imm1912), bin(rd), bin(opcode))
+    else:
+        raise Exception("Not decoded yet")
+
+
+def process():
     global PC
     regfile[PC] -= 0x80000000
-    for i in range(10):
+    for i in range(20):
         # *** Fetch ***
         instr = fetch(regfile[PC])
         # *** Decode ***
         op = OP(extractBits(instr, 6, 0))
         if (op != OP.SYSTEM):
+            print(hex(instr))
             type = instruction_type(op.value)
-            instruction_parsing(type, instr)
+            print("{:<10} {:<2} {:<2}".format(hex(instr), "->", type))
+            intruction_elements = instruction_parsing(type, instr)
+            execute(type, intruction_elements)
 
         # move PC
         regfile[PC] += 0x4
@@ -282,7 +287,7 @@ def execute():
     return False
 
 
-def tests():
+def main():
     for x in glob.glob("/home/adam/dev/riscv-tests/isa/rv32ui-p-add"):
         if (x.endswith('.dump')):
             continue
@@ -298,13 +303,9 @@ def tests():
                 # print(segment.header.p_paddr, binascii.hexlify(segment.data()))
             regfile[PC] = 0x80000000
             instrcnt = 0
-            while execute():
+            while process():
                 instrcnt += 1
             print("run %d instructions" % instrcnt)
-
-
-def main():
-    tests()
 
 
 if __name__ == '__main__':
@@ -430,7 +431,7 @@ imm[11:0]                       rs1         111                 rd              
 0000000             shamt       rs1         001                 rd              0010011    SLLI
 0000000             shamt       rs1         101                 rd              0010011    SRLI
 0100000             shamt       rs1         101                 rd              0010011    SRAI
-0000000             rs2         rs1         000                 rd              0110011     ADD
+0000000             rs2         rs1         000                 rd              0110011    ADD
 0100000             rs2         rs1         000                 rd              0110011    SUB
 0000000             rs2         rs1         001                 rd              0110011    SLL
 0000000             rs2         rs1         010                 rd              0110011    SLT
