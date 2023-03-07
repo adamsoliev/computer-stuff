@@ -11,7 +11,7 @@ import struct
 
 INSTR = {"lui":   {"opcode": 0b0110111, "type": "U", "funct3": 0xF},
          "auipc": {"opcode": 0b0010111, "type": "U", "funct3": 0xF},
-         "jal":   {"opcode": 0b1101111, "type": "U", "funct3": 0xF},
+         "jal":   {"opcode": 0b1101111, "type": "J", "funct3": 0xF},
 
          "jalr":  {"opcode": 0b1100111, "type": "I", "funct3": 0x0},
 
@@ -70,6 +70,7 @@ B_IMM7_MASK = 0x80
 J_IMM1912_MASK = 0xFF000
 J_IMM11_MASK = 0x100000
 J_IMM101_MASK = 0x7FE00000
+J_IMM = 0xFFFFF000
 
 
 def find_instr_name(opcode, instr_type, funct3):
@@ -84,7 +85,7 @@ def concat(a, b):
     return int(f"{a}{b}")
 
 
-def instruction_type(opcode):
+def find_instruction_type(opcode):
     if ((opcode == 0x37) or (opcode == 0x17)):  # TODO: check if this needs to be changed
         inst_type = 'U'
     elif opcode == 0x63:
@@ -159,22 +160,25 @@ def j_decoding(inst):
     imm1912 = (inst & J_IMM1912_MASK) >> 12     # 8 bits [12-19]
     imm11 = (inst & J_IMM11_MASK) >> 20         # 1 bit [20]
     imm101 = (inst & J_IMM101_MASK) >> 21       # 10 bits [21-30]
-    imm12 = inst >> 31                          # 1 bit [31]
-    return imm12, imm101, imm11, imm1912, rd, opcode
+    imm20 = inst >> 31                          # 1 bit [31]
+    # imm = (inst & J_IMM) >> 12
+    # return imm20, imm101, imm11, imm1912, rd, opcode
+    imm = concat(imm20, concat(imm1912, concat(imm11, imm101))) << 1
+    return imm, rd, opcode
 
 
 def instruction_parsing(inst_type, instruction):
-    if inst_type == 'U':
+    if (inst_type == 'U'):
         return u_decoding(instruction)
-    elif inst_type == 'I':
+    elif (inst_type == 'I'):
         return i_decoding(instruction)
-    elif inst_type == 'R':
+    elif (inst_type == 'R'):
         return r_decoding(instruction)
-    elif inst_type == 'S':
+    elif (inst_type == 'S'):
         return s_decoding(instruction)
-    elif inst_type == 'B':
+    elif (inst_type == 'B'):
         return b_decoding(instruction)
-    elif inst_type == 'J':
+    elif (inst_type == 'J'):
         return j_decoding(instruction)
     else:
         raise Exception("Not decoded yet")
@@ -242,22 +246,41 @@ def extractBits(instr, s, e):
     return result
 
 
-# Executes a single instruction
-def execute(type, instruction_elements):
-    if (type == 'U'):
+def sign_extend(x, l):
+    if x >> (l-1) == 1:
+        return -((1 << l) - x)
+    else:
+        return x
+
+
+# Executes a single instructio
+def execute(instruction_type, instruction_elements):
+    if (instruction_type == 'U'):
         [imm, rd, opcode] = instruction_elements
-    elif (type == 'I'):
+        regfile[PC] += 0x4
+        print(find_instr_name(opcode, instruction_type, 0xF))
+    elif (instruction_type == 'I'):
         [imm, rs1, funct3, rd, opcode] = instruction_elements
-    elif (type == 'R'):
+        regfile[PC] += 0x4
+        print(find_instr_name(opcode, instruction_type, funct3))
+    elif (instruction_type == 'R'):
         [funct7, rs2, rs1, funct3, rd, opcode] = instruction_elements
-    elif (type == 'S'):
+        regfile[PC] += 0x4
+        print(find_instr_name(opcode, instruction_type, funct3))
+    elif (instruction_type == 'S'):
         [imm, rs2, rs1, funct3, opcode] = instruction_elements
-    elif (type == 'B'):
+        regfile[PC] += 0x4
+        print(find_instr_name(opcode, instruction_type, funct3))
+    elif (instruction_type == 'B'):
         [imm, rs2, rs1, funct3, opcode] = instruction_elements
-    elif (type == 'J'):
-        [imm12, imm101, imm11, imm1912, rd, opcode] = instruction_elements
-        print(bin(imm12), bin(imm101), bin(imm11),
-              bin(imm1912), bin(rd), bin(opcode))
+        regfile[PC] += 0x4
+        print(find_instr_name(opcode, instruction_type, funct3))
+    elif (instruction_type == 'J'):
+        [imm, rd, opcode] = instruction_elements
+        print("jump")
+        if (opcode == 0b1101111):  # jump
+            regfile[rd] = regfile[PC] + 0x4
+            regfile[PC] += imm
     else:
         raise Exception("Not decoded yet")
 
@@ -265,20 +288,20 @@ def execute(type, instruction_elements):
 def process():
     global PC
     regfile[PC] -= 0x80000000
-    for i in range(421):
+    for i in range(21):
         # *** Fetch ***
         instr = fetch(regfile[PC])
         # *** Decode ***
         op = OP(extractBits(instr, 6, 0))
         if (op != OP.SYSTEM):
-            print(hex(instr))
-            type = instruction_type(op.value)
-            print("{:<4} {:<10} {:<2} {:<2}".format(i, hex(instr), "->", type))
-            intruction_elements = instruction_parsing(type, instr)
-            execute(type, intruction_elements)
+            instruction_type = find_instruction_type(op.value)
+            print("{:<4} {:<10} {:<2} {:<2} {:<10} {:<10}".format(
+                i, hex(instr), "->", instruction_type, op, hex(regfile[PC])), end=" ")
+            intruction_elements = instruction_parsing(instruction_type, instr)
+            execute(instruction_type, intruction_elements)
 
         # move PC
-        regfile[PC] += 0x4
+        # regfile[PC] += 0x4
 
     """
     regfile[PC] points to the next instr
