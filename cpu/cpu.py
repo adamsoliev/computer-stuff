@@ -9,9 +9,11 @@ from enum import Enum
 import struct
 
 
-INSTR = {"lui":   {"opcode": 0b0110111, "type": "U", "funct3": 0xF},
-         "auipc": {"opcode": 0b0010111, "type": "U", "funct3": 0xF},
-         "jal":   {"opcode": 0b1101111, "type": "J", "funct3": 0xF},
+INSTR = {"lui":   {"opcode": 0b0110111, "type": "U", "funct3": 0x0},    # funct3: 0xF
+         # funct3: 0xF
+         "auipc": {"opcode": 0b0010111, "type": "U", "funct3": 0x0},
+         # funct3: 0xF
+         "jal":   {"opcode": 0b1101111, "type": "J", "funct3": 0x0},
 
          "jalr":  {"opcode": 0b1100111, "type": "I", "funct3": 0x0},
 
@@ -89,7 +91,7 @@ def find_instr_name(opcode, instr_type, funct3):
     for parent_key, inner_dict in INSTR.items():
         if inner_dict["opcode"] == opcode and inner_dict["type"] == instr_type and inner_dict["funct3"] == funct3:
             return parent_key
-    return None  # Return None if no match is found
+    return ""  # Return None if no match is found
 
 
 # Concatenate two binary numbers
@@ -309,11 +311,15 @@ def extractBits(instr, s, e):
     return result
 
 
-def sign_extend(x, l):
-    if x >> (l-1) == 1:
-        return -((1 << l) - x)
-    else:
-        return x
+# def sign_extend(x, l):
+#     if x >> (l-1) == 1:
+#         return -((1 << l) - x)
+#     else:
+#         return x
+
+def sign_extend(value, bits):
+    sign_bit = 1 << (bits - 1)
+    return (value & (sign_bit - 1)) - (value & sign_bit)
 
 
 def dump():
@@ -329,32 +335,36 @@ def dump():
 def execute(instruction_type, instruction_elements):
     if (instruction_type == 'U'):
         [imm, rd, opcode] = instruction_elements
+        op = OP(opcode)
+        if (op == OP.AUIPC):
+            regfile[rd] = regfile[PC] + imm
+        if (op == OP.LUI):
+            constant = imm << 12
+            regfile[rd] = constant
         regfile[PC] += 0x4
-        print(find_instr_name(opcode, instruction_type, 0xF))
     elif (instruction_type == 'I'):
         [imm, rs1, funct3, rd, opcode] = instruction_elements
         op = OP(opcode)
+        funct3 = FUNCT3(funct3)
         # addi
         if (op == OP.OP_IMM and funct3 == FUNCT3.ADDI):
-            imm_se = sign_extend(imm, 32)
-            regfile[rd] = regfile[rs1] + imm_se
+            imm = sign_extend(imm, 12)
+            regfile[rd] = regfile[rs1] + imm
         # csrr family
         if (op == OP.SYSTEM and ((funct3 == FUNCT3.CSRRW) or (funct3 == FUNCT3.CSRRS) or (funct3 == FUNCT3.CSRRC) or (funct3 == FUNCT3.CSRRWI) or (funct3 == FUNCT3.CSRRSI) or (funct3 == FUNCT3.CSRRCI))):  # csrrw
             # TODO: needs to be completed
             pass
         regfile[PC] += 0x4
-        print(find_instr_name(opcode, instruction_type, funct3))
     elif (instruction_type == 'R'):
         [funct7, rs2, rs1, funct3, rd, opcode] = instruction_elements
         regfile[PC] += 0x4
-        print(find_instr_name(opcode, instruction_type, funct3))
     elif (instruction_type == 'S'):
         [imm, rs2, rs1, funct3, opcode] = instruction_elements
         regfile[PC] += 0x4
-        print(find_instr_name(opcode, instruction_type, funct3))
     elif (instruction_type == 'B'):
         [imm, rs2, rs1, funct3, opcode] = instruction_elements
         op = OP(opcode)
+        funct3 = FUNCT3(funct3)
         cond = False
         if (op == OP.BRANCH and (funct3 == FUNCT3.BNE)):
             cond = regfile[rs1] != regfile[rs2]
@@ -363,10 +373,8 @@ def execute(instruction_type, instruction_elements):
         if (cond):
             regfile[PC] += sign_extend(imm, 32)
         regfile[PC] += 0x4
-        print(find_instr_name(opcode, instruction_type, funct3))
     elif (instruction_type == 'J'):
         [imm, rd, opcode] = instruction_elements
-        print("jump")
         op = OP(opcode)
         if (op == OP.JAL):
             regfile[rd] = regfile[PC] + 0x4
@@ -389,29 +397,23 @@ def process():
 
     for i in range(61):
         # *** Fetch ***
-        instr = fetch(regfile[PC])
+        instruction = fetch(regfile[PC])
         # *** Decode ***
-        op = OP(extractBits(instr, 6, 0))
-        instruction_type = find_instruction_type(op.value)
+        opcode = extractBits(instruction, 6, 0)
+        instruction_type = find_instruction_type(opcode)
 
+        funct3 = extractBits(instruction, 14, 12)
         # table rows
         # -----------------------------------------------------------------------
-        print("{:<3} {:<12} {:<4} {:<5} {:<13} {:<10}".format(
-            i, hex(instr), "->", instruction_type, op, hex(regfile[PC])), end=" ")
+        print("{:<3} {:<12} {:<4} {:<5} {:<13} {:<10} {:<5}".format(
+            i, hex(instruction), "->", instruction_type, OP(opcode), hex(regfile[PC]), find_instr_name(opcode, instruction_type, funct3)))
         # -----------------------------------------------------------------------
 
-        intruction_elements = instruction_parsing(instruction_type, instr)
+        # *** Execute ***
+        intruction_elements = instruction_parsing(
+            instruction_type, instruction)
         execute(instruction_type, intruction_elements)
-    dump()
-
-    # move PC
-    # regfile[PC] += 0x4
-
-    """
-    regfile[PC] points to the next instr
-        // fetch next instr
-        // process
-    """
+        dump()
     return False
 
 
