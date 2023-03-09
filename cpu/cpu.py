@@ -51,7 +51,19 @@ INSTR = {"lui":   {"opcode": 0b0110111, "type": "U", "funct3": 0xF},
          "srl":   {"opcode": 0b0110011, "type": "R", "funct3": 0x5},
          "sra":   {"opcode": 0b0110011, "type": "R", "funct3": 0x5},
          "or":    {"opcode": 0b0110011, "type": "R", "funct3": 0x6},
-         "and":   {"opcode": 0b0110011, "type": "R", "funct3": 0x7}}
+         "and":   {"opcode": 0b0110011, "type": "R", "funct3": 0x7},
+
+         # SYSTEM
+         "csrrw": {"opcode": 0b1110011, "type": "I", "funct3": 0x1},
+         "csrrs": {"opcode": 0b1110011, "type": "I", "funct3": 0x2},
+         "csrrc": {"opcode": 0b1110011, "type": "I", "funct3": 0x3},
+         "csrrwi": {"opcode": 0b1110011, "type": "I", "funct3": 0x5},
+         "csrrsi": {"opcode": 0b1110011, "type": "I", "funct3": 0x6},
+         "csrrci": {"opcode": 0b1110011, "type": "I", "funct3": 0x7},
+
+         # MISC-MEM
+         "fence": {"opcode": 0b0001111, "type": "I", "funct3": 0x0},
+         }
 
 # Masks
 OPCODE_MASK = 0x7F
@@ -94,7 +106,7 @@ def find_instruction_type(opcode):
         inst_type = 'R'
     elif opcode == 0x23:
         inst_type = 'S'
-    elif ((opcode == 0x13) or (opcode == 0x67) or (opcode == 0x0F)):
+    elif ((opcode == 0x13) or (opcode == 0x67) or (opcode == 0x0F) or (opcode == 0x73)):
         # 0x0F - fence
         inst_type = 'I'
     elif (opcode == 0x6F):
@@ -198,6 +210,57 @@ class OP(Enum):
     SYSTEM = 0b1110011
 
 
+class FUNCT3(Enum):
+    JALR = 0b000
+
+    BEQ = 0b000
+    BNE = 0b001
+    BLT = 0b100
+    BGE = 0b101
+    BLTU = 0b110
+    BGEU = 0b111
+
+    LB = 0b000
+    LH = 0b001
+    LW = 0b010
+    LBU = 0b100
+    LHU = 0b101
+
+    SB = 0b000
+    SH = 0b001
+    SW = 0b010
+    ADDI = 0b000
+    SLTI = 0b010
+    SLTIU = 0b011
+    XORI = 0b100
+    ORI = 0b110
+    ANDI = 0b111
+    SLLI = 0b001
+    SRLI = 0b101
+    SRAI = 0b101
+    ADD = 0b000
+    SUB = 0b000
+    SLL = 0b001
+    SLT = 0b010
+    SLTU = 0b011
+    XOR = 0b100
+    SRL = 0b101
+    SRA = 0b101
+    OR = 0b110
+    AND = 0b111
+
+    FENCE = 0b000
+    ECALL = 0b000
+    EBREAK = 0b000
+
+    CSRRW = 0b001
+    CSRRS = 0b010
+    CSRRC = 0b011
+    CSRRWI = 0b101
+    CSRRSI = 0b110
+    CSRRCI = 0b111
+
+
 regnames = ["x0", "ra", "sp", "gp", "tp"] + ["t%d" % i for i in range(0, 3)] + ["s0", "s1"] + [
     "a%d" % i for i in range(0, 8)] + ["s%d" % i for i in range(2, 12)] + ["t%d" % i for i in range(3, 7)] + ["PC"]
 
@@ -253,6 +316,15 @@ def sign_extend(x, l):
         return x
 
 
+def dump():
+    pp = []
+    for i in range(33):
+        if i != 0 and i % 8 == 0:
+            pp += "\n"
+        pp += " %3s: %08x" % (regnames[i], regfile[i])
+    print(''.join(pp))
+
+
 # Executes a single instructio
 def execute(instruction_type, instruction_elements):
     if (instruction_type == 'U'):
@@ -261,6 +333,15 @@ def execute(instruction_type, instruction_elements):
         print(find_instr_name(opcode, instruction_type, 0xF))
     elif (instruction_type == 'I'):
         [imm, rs1, funct3, rd, opcode] = instruction_elements
+        op = OP(opcode)
+        # addi
+        if (op == OP.OP_IMM and funct3 == FUNCT3.ADDI):
+            imm_se = sign_extend(imm, 32)
+            regfile[rd] = regfile[rs1] + imm_se
+        # csrr family
+        if (op == OP.SYSTEM and ((funct3 == FUNCT3.CSRRW) or (funct3 == FUNCT3.CSRRS) or (funct3 == FUNCT3.CSRRC) or (funct3 == FUNCT3.CSRRWI) or (funct3 == FUNCT3.CSRRSI) or (funct3 == FUNCT3.CSRRCI))):  # csrrw
+            # TODO: needs to be completed
+            pass
         regfile[PC] += 0x4
         print(find_instr_name(opcode, instruction_type, funct3))
     elif (instruction_type == 'R'):
@@ -273,12 +354,21 @@ def execute(instruction_type, instruction_elements):
         print(find_instr_name(opcode, instruction_type, funct3))
     elif (instruction_type == 'B'):
         [imm, rs2, rs1, funct3, opcode] = instruction_elements
+        op = OP(opcode)
+        cond = False
+        if (op == OP.BRANCH and (funct3 == FUNCT3.BNE)):
+            cond = regfile[rs1] != regfile[rs2]
+        if (op == OP.BRANCH and (funct3 == FUNCT3.BEQ)):
+            cond = regfile[rs1] == regfile[rs2]
+        if (cond):
+            regfile[PC] += sign_extend(imm, 32)
         regfile[PC] += 0x4
         print(find_instr_name(opcode, instruction_type, funct3))
     elif (instruction_type == 'J'):
         [imm, rd, opcode] = instruction_elements
         print("jump")
-        if (opcode == 0b1101111):  # jump
+        op = OP(opcode)
+        if (op == OP.JAL):
             regfile[rd] = regfile[PC] + 0x4
             regfile[PC] += imm
     else:
@@ -288,20 +378,34 @@ def execute(instruction_type, instruction_elements):
 def process():
     global PC
     regfile[PC] -= 0x80000000
-    for i in range(21):
+
+    # table header
+    # -----------------------------------------------------------------------
+    print("{:<3} {:<12} {:<4} {:<5} {:<13} {:<10} {:<5}".format(
+        "Idx", "Instruction", "", "Type", "Opcode", "PC", "Name"))
+    print("{:<3} {:<12} {:<4} {:<5} {:<13} {:<10} {:<5}".format(
+        "---", "----------", "", "----", "-----------", "------", "------"))
+    # -----------------------------------------------------------------------
+
+    for i in range(61):
         # *** Fetch ***
         instr = fetch(regfile[PC])
         # *** Decode ***
         op = OP(extractBits(instr, 6, 0))
-        if (op != OP.SYSTEM):
-            instruction_type = find_instruction_type(op.value)
-            print("{:<4} {:<10} {:<2} {:<2} {:<10} {:<10}".format(
-                i, hex(instr), "->", instruction_type, op, hex(regfile[PC])), end=" ")
-            intruction_elements = instruction_parsing(instruction_type, instr)
-            execute(instruction_type, intruction_elements)
+        instruction_type = find_instruction_type(op.value)
 
-        # move PC
-        # regfile[PC] += 0x4
+        # table rows
+        # -----------------------------------------------------------------------
+        print("{:<3} {:<12} {:<4} {:<5} {:<13} {:<10}".format(
+            i, hex(instr), "->", instruction_type, op, hex(regfile[PC])), end=" ")
+        # -----------------------------------------------------------------------
+
+        intruction_elements = instruction_parsing(instruction_type, instr)
+        execute(instruction_type, intruction_elements)
+    dump()
+
+    # move PC
+    # regfile[PC] += 0x4
 
     """
     regfile[PC] points to the next instr
@@ -428,45 +532,52 @@ imm[20] imm[10:1] imm[11] imm[19:12]              |       rd          | opcode |
 """
                             RV32I Base Instruction Set
 -------------------------------------------------------------------------------------------------
-imm[31:12]                                                      rd              0110111    LUI
-imm[31:12]                                                      rd              0010111    AUIPC
-imm[20|10:1|11|19:12]                                           rd              1101111    JAL
-imm[11:0]                       rs1         000                 rd              1100111    JALR
-imm[12|10:5]        rs2         rs1         000            imm[4:1|11]          1100011    BEQ
-imm[12|10:5]        rs2         rs1         001            imm[4:1|11]          1100011    BNE
-imm[12|10:5]        rs2         rs1         100            imm[4:1|11]          1100011    BLT
-imm[12|10:5]        rs2         rs1         101            imm[4:1|11]          1100011    BGE
-imm[12|10:5]        rs2         rs1         110            imm[4:1|11]          1100011    BLTU
-imm[12|10:5]        rs2         rs1         111            imm[4:1|11]          1100011    BGEU
-imm[11:0]                       rs1         000                 rd              0000011    LB
-imm[11:0]                       rs1         001                 rd              0000011    LH
-imm[11:0]                       rs1         010                 rd              0000011    LW
-imm[11:0]                       rs1         100                 rd              0000011    LBU
-imm[11:0]                       rs1         101                 rd              0000011    LHU
-imm[11:5]           rs2         rs1         000              imm[4:0]           0100011    SB
-imm[11:5]           rs2         rs1         001              imm[4:0]           0100011    SH
-imm[11:5]           rs2         rs1         010              imm[4:0]           0100011    SW
-imm[11:0]                       rs1         000                 rd              0010011    ADDI
-imm[11:0]                       rs1         010                 rd              0010011    SLTI
-imm[11:0]                       rs1         011                 rd              0010011    SLTIU
-imm[11:0]                       rs1         100                 rd              0010011    XORI
-imm[11:0]                       rs1         110                 rd              0010011    ORI
-imm[11:0]                       rs1         111                 rd              0010011    ANDI
-0000000             shamt       rs1         001                 rd              0010011    SLLI
-0000000             shamt       rs1         101                 rd              0010011    SRLI
-0100000             shamt       rs1         101                 rd              0010011    SRAI
-0000000             rs2         rs1         000                 rd              0110011    ADD
-0100000             rs2         rs1         000                 rd              0110011    SUB
-0000000             rs2         rs1         001                 rd              0110011    SLL
-0000000             rs2         rs1         010                 rd              0110011    SLT
-0000000             rs2         rs1         011                 rd              0110011    SLTU
-0000000             rs2         rs1         100                 rd              0110011    XOR
-0000000             rs2         rs1         101                 rd              0110011    SRL
-0100000             rs2         rs1         101                 rd              0110011    SRA
-0000000             rs2         rs1         110                 rd              0110011    OR
-0000000             rs2         rs1         111                 rd              0110011    AND
-fm       pred        succ       rs1         000                 rd              0001111    FENCE
-000000000000                   00000        000                 00000           1110011    ECALL
-000000000001                   00000        000                 00000           1110011    EBREAK
+imm[31:12]                                                      rd              0110111     LUI
+imm[31:12]                                                      rd              0010111     AUIPC
+imm[20|10:1|11|19:12]                                           rd              1101111     JAL
+imm[11:0]                       rs1         000                 rd              1100111     JALR
+imm[12|10:5]        rs2         rs1         000            imm[4:1|11]          1100011     BEQ
+imm[12|10:5]        rs2         rs1         001            imm[4:1|11]          1100011     BNE
+imm[12|10:5]        rs2         rs1         100            imm[4:1|11]          1100011     BLT
+imm[12|10:5]        rs2         rs1         101            imm[4:1|11]          1100011     BGE
+imm[12|10:5]        rs2         rs1         110            imm[4:1|11]          1100011     BLTU
+imm[12|10:5]        rs2         rs1         111            imm[4:1|11]          1100011     BGEU
+imm[11:0]                       rs1         000                 rd              0000011     LB
+imm[11:0]                       rs1         001                 rd              0000011     LH
+imm[11:0]                       rs1         010                 rd              0000011     LW
+imm[11:0]                       rs1         100                 rd              0000011     LBU
+imm[11:0]                       rs1         101                 rd              0000011     LHU
+imm[11:5]           rs2         rs1         000              imm[4:0]           0100011     SB
+imm[11:5]           rs2         rs1         001              imm[4:0]           0100011     SH
+imm[11:5]           rs2         rs1         010              imm[4:0]           0100011     SW
+imm[11:0]                       rs1         000                 rd              0010011     ADDI
+imm[11:0]                       rs1         010                 rd              0010011     SLTI
+imm[11:0]                       rs1         011                 rd              0010011     SLTIU
+imm[11:0]                       rs1         100                 rd              0010011     XORI
+imm[11:0]                       rs1         110                 rd              0010011     ORI
+imm[11:0]                       rs1         111                 rd              0010011     ANDI
+0000000             shamt       rs1         001                 rd              0010011     SLLI
+0000000             shamt       rs1         101                 rd              0010011     SRLI
+0100000             shamt       rs1         101                 rd              0010011     SRAI
+0000000             rs2         rs1         000                 rd              0110011     ADD
+0100000             rs2         rs1         000                 rd              0110011     SUB
+0000000             rs2         rs1         001                 rd              0110011     SLL
+0000000             rs2         rs1         010                 rd              0110011     SLT
+0000000             rs2         rs1         011                 rd              0110011     SLTU
+0000000             rs2         rs1         100                 rd              0110011     XOR
+0000000             rs2         rs1         101                 rd              0110011     SRL
+0100000             rs2         rs1         101                 rd              0110011     SRA
+0000000             rs2         rs1         110                 rd              0110011     OR
+0000000             rs2         rs1         111                 rd              0110011     AND
+fm       pred        succ       rs1         000                 rd              0001111     FENCE
+000000000000                   00000        000                 00000           1110011     ECALL
+000000000001                   00000        000                 00000           1110011     EBREAK
+csr                             rs1         001                 rd              1110011     CSRRW
+csr                             rs1         010                 rd              1110011     CSRRS
+csr                             rs1         011                 rd              1110011     CSRRC
+csr                             uimm        101                 rd              1110011     CSRRWI
+csr                             uimm        110                 rd              1110011     CSRRSI
+csr                             uimm        111                 rd              1110011     CSRRCI
 -------------------------------------------------------------------------------------------------
+
 """
