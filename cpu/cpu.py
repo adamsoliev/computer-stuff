@@ -311,11 +311,12 @@ def extractBits(instr, s, e):
     return result
 
 
-# def sign_extend(x, l):
-#     if x >> (l-1) == 1:
-#         return -((1 << l) - x)
-#     else:
-#         return x
+def sign_extend_(x, l):
+    if x >> (l-1) == 1:
+        return -((1 << l) - x)
+    else:
+        return x
+
 
 def sign_extend(value, bits):
     sign_bit = 1 << (bits - 1)
@@ -350,6 +351,8 @@ def execute(instruction_type, instruction_elements):
         if (op == OP.OP_IMM and funct3 == FUNCT3.ADDI):
             imm = sign_extend(imm, 12)
             regfile[rd] = regfile[rs1] + imm
+        if (op == OP.OP_IMM and funct3 == FUNCT3.SLLI):
+            regfile[rd] = regfile[rs1] << imm
         # csrr family
         if (op == OP.SYSTEM and ((funct3 == FUNCT3.CSRRW) or (funct3 == FUNCT3.CSRRS) or (funct3 == FUNCT3.CSRRC) or (funct3 == FUNCT3.CSRRWI) or (funct3 == FUNCT3.CSRRSI) or (funct3 == FUNCT3.CSRRCI))):  # csrrw
             # TODO: needs to be completed
@@ -370,8 +373,12 @@ def execute(instruction_type, instruction_elements):
             cond = regfile[rs1] != regfile[rs2]
         if (op == OP.BRANCH and (funct3 == FUNCT3.BEQ)):
             cond = regfile[rs1] == regfile[rs2]
+        if (op == OP.BRANCH and (funct3 == FUNCT3.BLT)):
+            cond = sign_extend_(regfile[rs1], 32) < sign_extend_(
+                regfile[rs2], 32)
         if (cond):
-            regfile[PC] += sign_extend(imm, 32)
+            regfile[PC] += imm
+            return
         regfile[PC] += 0x4
     elif (instruction_type == 'J'):
         [imm, rd, opcode] = instruction_elements
@@ -395,7 +402,7 @@ def process():
         "---", "----------", "", "----", "-----------", "------", "------"))
     # -----------------------------------------------------------------------
 
-    for i in range(61):
+    for i in range(91):
         # *** Fetch ***
         instruction = fetch(regfile[PC])
         # *** Decode ***
