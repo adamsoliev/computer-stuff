@@ -9,10 +9,8 @@ from enum import Enum
 import struct
 
 
-INSTR = {"lui":   {"opcode": 0b0110111, "type": "U", "funct3": 0x0},    # funct3: 0xF
-         # funct3: 0xF
+INSTR = {"lui":   {"opcode": 0b0110111, "type": "U", "funct3": 0x0},
          "auipc": {"opcode": 0b0010111, "type": "U", "funct3": 0x0},
-         # funct3: 0xF
          "jal":   {"opcode": 0b1101111, "type": "J", "funct3": 0x0},
 
          "jalr":  {"opcode": 0b1100111, "type": "I", "funct3": 0x0},
@@ -254,6 +252,7 @@ class FUNCT3(Enum):
     FENCE = 0b000
     ECALL = 0b000
     EBREAK = 0b000
+    MRAT = 0b000
 
     CSRRW = 0b001
     CSRRS = 0b010
@@ -342,9 +341,9 @@ def execute(instruction_type, instruction_elements):
         if (op == OP.LUI):
             constant = imm << 12
             regfile[rd] = constant
-        regfile[PC] += 0x4
     elif (instruction_type == 'I'):
         [imm, rs1, funct3, rd, opcode] = instruction_elements
+        # print(hex(imm), regnames[rs1], hex(funct3), regnames[rd], hex(opcode))
         op = OP(opcode)
         funct3 = FUNCT3(funct3)
         # addi
@@ -357,13 +356,22 @@ def execute(instruction_type, instruction_elements):
         if (op == OP.SYSTEM and ((funct3 == FUNCT3.CSRRW) or (funct3 == FUNCT3.CSRRS) or (funct3 == FUNCT3.CSRRC) or (funct3 == FUNCT3.CSRRWI) or (funct3 == FUNCT3.CSRRSI) or (funct3 == FUNCT3.CSRRCI))):  # csrrw
             # TODO: needs to be completed
             pass
-        regfile[PC] += 0x4
+        if (op == OP.SYSTEM and (funct3 == FUNCT3.ECALL) and imm == 0x0):
+            print("ecall")
+            return False
+        elif (op == OP.SYSTEM and (funct3 == FUNCT3.EBREAK) and imm == 0x1):
+            print("ebreak")
+        elif (op == OP.SYSTEM and (funct3 == FUNCT3.MRAT) and imm == 0x302):
+            print("mrat")
+            # return False
     elif (instruction_type == 'R'):
         [funct7, rs2, rs1, funct3, rd, opcode] = instruction_elements
-        regfile[PC] += 0x4
+        op = OP(opcode)
+        funct3 = FUNCT3(funct3)
+        if (op == OP.OP and funct3 == FUNCT3.ADD):
+            regfile[rd] = regfile[rs1] + regfile[rs2]
     elif (instruction_type == 'S'):
         [imm, rs2, rs1, funct3, opcode] = instruction_elements
-        regfile[PC] += 0x4
     elif (instruction_type == 'B'):
         [imm, rs2, rs1, funct3, opcode] = instruction_elements
         op = OP(opcode)
@@ -378,8 +386,9 @@ def execute(instruction_type, instruction_elements):
                 regfile[rs2], 32)
         if (cond):
             regfile[PC] += imm
-            return
-        regfile[PC] += 0x4
+
+            print(hex(imm), regfile[rs2], regnames[rs2], regfile[rs1],
+                  regnames[rs1], funct3, hex(opcode), hex(regfile[PC]))
     elif (instruction_type == 'J'):
         [imm, rd, opcode] = instruction_elements
         op = OP(opcode)
@@ -388,40 +397,41 @@ def execute(instruction_type, instruction_elements):
             regfile[PC] += imm
     else:
         raise Exception("Not decoded yet")
+    regfile[PC] += 0x4
+    return True
 
 
 def process():
     global PC
-    regfile[PC] -= 0x80000000
+    # regfile[PC] -= 0x80000000
 
-    # table header
+    # # table header
+    # # -----------------------------------------------------------------------
+    # print("{:<3} {:<12} {:<4} {:<5} {:<13} {:<10} {:<5}".format(
+    #     "Idx", "Instruction", "", "Type", "Opcode", "PC", "Name"))
+    # print("{:<3} {:<12} {:<4} {:<5} {:<13} {:<10} {:<5}".format(
+    #     "---", "----------", "", "----", "-----------", "------", "------"))
+    # # -----------------------------------------------------------------------
+
+    # *** Fetch ***
+    instruction = fetch(regfile[PC])
+    # *** Decode ***
+    opcode = extractBits(instruction, 6, 0)
+    instruction_type = find_instruction_type(opcode)
+
+    funct3 = extractBits(instruction, 14, 12)
+    # table rows
     # -----------------------------------------------------------------------
-    print("{:<3} {:<12} {:<4} {:<5} {:<13} {:<10} {:<5}".format(
-        "Idx", "Instruction", "", "Type", "Opcode", "PC", "Name"))
-    print("{:<3} {:<12} {:<4} {:<5} {:<13} {:<10} {:<5}".format(
-        "---", "----------", "", "----", "-----------", "------", "------"))
+    print("{:<12} {:<4} {:<5} {:<13} {:<10} {:<5}".format(
+        hex(instruction), "->", instruction_type, OP(opcode), hex(regfile[PC]), find_instr_name(opcode, instruction_type, funct3)))
     # -----------------------------------------------------------------------
 
-    for i in range(91):
-        # *** Fetch ***
-        instruction = fetch(regfile[PC])
-        # *** Decode ***
-        opcode = extractBits(instruction, 6, 0)
-        instruction_type = find_instruction_type(opcode)
-
-        funct3 = extractBits(instruction, 14, 12)
-        # table rows
-        # -----------------------------------------------------------------------
-        print("{:<3} {:<12} {:<4} {:<5} {:<13} {:<10} {:<5}".format(
-            i, hex(instruction), "->", instruction_type, OP(opcode), hex(regfile[PC]), find_instr_name(opcode, instruction_type, funct3)))
-        # -----------------------------------------------------------------------
-
-        # *** Execute ***
-        intruction_elements = instruction_parsing(
-            instruction_type, instruction)
-        execute(instruction_type, intruction_elements)
-        dump()
-    return False
+    # *** Execute ***
+    intruction_elements = instruction_parsing(
+        instruction_type, instruction)
+    execute(instruction_type, intruction_elements)
+    # dump()
+    return True
 
 
 def main():
@@ -438,7 +448,8 @@ def main():
                     continue
                 load(segment.header.p_paddr, segment.data())
                 # print(segment.header.p_paddr, binascii.hexlify(segment.data()))
-            regfile[PC] = 0x80000000
+            # regfile[PC] = 0x80000000
+            regfile[PC] = 0x0
             instrcnt = 0
             while process():
                 instrcnt += 1
