@@ -190,7 +190,8 @@ def process():
         elif (funct3 == FUNCT3.XORI):
             print("xori")
         elif (funct3 == FUNCT3.SLLI):
-            print("slli")
+            shamt = extractBits(instruction, 24, 20)
+            regfile[rd] = regfile[rs1] << shamt
         elif (funct3 == FUNCT3.SRLI):
             print("srli")
         elif (funct3 == FUNCT3.SRAI):
@@ -232,15 +233,21 @@ def process():
         if (funct3 == FUNCT3.BEQ):
             if (regfile[rs1] == regfile[rs2]):
                 regfile[PC] += offset
+                return True
         elif (funct3 == FUNCT3.BNE):
             if (regfile[rs1] != regfile[rs2]):
                 regfile[PC] += offset
+                return True
         elif (funct3 == FUNCT3.BLT):
-            print("blt")
+            if (sign_extend(regfile[rs1], 32) < sign_extend(regfile[rs2], 32)):
+                regfile[PC] += offset
+                return True
         elif (funct3 == FUNCT3.BGE):
             print("bge")
         elif (funct3 == FUNCT3.BLTU):
-            print("bltu")
+            if (regfile[rs1] < regfile[rs2]):
+                regfile[PC] += offset
+                return True
         elif (funct3 == FUNCT3.BGEU):
             print("bgeu")
         else:
@@ -250,7 +257,16 @@ def process():
         # U-type instruction
         rd = extractBits(instruction, 11, 7)
         imm = extractBits(instruction, 31, 12)
-        regfile[rd] = regfile[PC] + imm
+        offset = imm << 12
+        regfile[rd] = regfile[PC] + offset
+
+    elif (opcode == OP.LUI):
+        # U-type instruction
+        rd = extractBits(instruction, 11, 7)
+        imm = extractBits(instruction, 31, 12)
+        constant = imm << 12
+        regfile[rd] = constant
+
     else:
         dump()
         raise Exception("write opcode %r" % opcode)
