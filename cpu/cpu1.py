@@ -199,11 +199,41 @@ def process():
         else:
             raise Exception("write funct3 %r" % funct3)
 
+    elif (opcode == OP.OP):
+        rd = extractBits(instruction, 11, 7)
+        funct3 = FUNCT3(extractBits(instruction, 14, 12))
+        rs1 = extractBits(instruction, 19, 15)
+        rs2 = extractBits(instruction, 24, 20)
+        funct7 = extractBits(instruction, 31, 25)
+        if (funct3 == FUNCT3.ADD and funct7 == 0b0000000):
+            regfile[rd] = regfile[rs1] + regfile[rs2]
+        elif (funct3 == FUNCT3.SLT and funct7 == 0b0000000):
+            print("slt")
+        elif (funct3 == FUNCT3.SLTU and funct7 == 0b0000000):
+            print("sltu")
+        elif (funct3 == FUNCT3.AND and funct7 == 0b0000000):
+            print("and")
+        elif (funct3 == FUNCT3.OR and funct7 == 0b0000000):
+            print("or")
+        elif (funct3 == FUNCT3.XOR and funct7 == 0b0000000):
+            print("xor")
+        elif (funct3 == FUNCT3.SLL and funct7 == 0b0000000):
+            print("sll")
+        elif (funct3 == FUNCT3.SRL and funct7 == 0b0000000):
+            print("srl")
+        elif (funct3 == FUNCT3.SUB and funct7 == 0b0100000):
+            print("sub")
+        elif (funct3 == FUNCT3.SRA and funct7 == 0b0100000):
+            print("sra")
+        else:
+            raise Exception("write %r %r %r" % (opcode, funct3, hex(funct12)))
+
     elif (opcode == OP.SYSTEM):
         rd = extractBits(instruction, 11, 7)
         funct3 = FUNCT3(extractBits(instruction, 14, 12))
         rs1 = extractBits(instruction, 19, 15)
         funct12 = extractBits(instruction, 31, 20)
+        trap_ret = extractBits(instruction, 31, 25)
         if (funct3 == FUNCT3.ECALL and funct12 == 0x0):
             print("ecall")
         elif (funct3 == FUNCT3.EBREAK and funct12 == 0x1):
@@ -220,8 +250,12 @@ def process():
             print("csrrsi")
         elif (funct3 == FUNCT3.CSRRCI):
             print("csrrci")
+        elif (funct3 == FUNCT3.MRAT and trap_ret == 0b0011000):
+            # TODO: could be handled differently in an actual system
+            print("mrat")
+            pass
         else:
-            raise Exception("write %r %r" % (funct3, hex(funct12)))
+            raise Exception("write %r %r %r" % (opcode, funct3, hex(funct12)))
 
     elif (opcode == OP.BRANCH):
         funct3 = FUNCT3(extractBits(instruction, 14, 12))
@@ -230,28 +264,25 @@ def process():
         imm = extractBits(
             instruction, 31, 30) << 12 | extractBits(instruction, 30, 25) << 5 | extractBits(instruction, 11, 8) << 1 | extractBits(instruction, 8, 7) << 11
         offset = sign_extend(imm, 13)
+        cond = False
         if (funct3 == FUNCT3.BEQ):
-            if (regfile[rs1] == regfile[rs2]):
-                regfile[PC] += offset
-                return True
+            cond = regfile[rs1] == regfile[rs2]
         elif (funct3 == FUNCT3.BNE):
-            if (regfile[rs1] != regfile[rs2]):
-                regfile[PC] += offset
-                return True
+            cond = regfile[rs1] != regfile[rs2]
         elif (funct3 == FUNCT3.BLT):
-            if (sign_extend(regfile[rs1], 32) < sign_extend(regfile[rs2], 32)):
-                regfile[PC] += offset
-                return True
+            cond = sign_extend(regfile[rs1], 32) < sign_extend(
+                regfile[rs2], 32)
         elif (funct3 == FUNCT3.BGE):
             print("bge")
         elif (funct3 == FUNCT3.BLTU):
-            if (regfile[rs1] < regfile[rs2]):
-                regfile[PC] += offset
-                return True
+            cond = regfile[rs1] < regfile[rs2]
         elif (funct3 == FUNCT3.BGEU):
             print("bgeu")
         else:
             raise Exception("write funct3 %r" % funct3)
+        if (cond):
+            regfile[PC] += offset
+            return True
 
     elif (opcode == OP.AUIPC):
         # U-type instruction
@@ -275,7 +306,6 @@ def process():
         hex(regfile[PC]), hex(instruction), opcode))
 
     dump()
-
     regfile[PC] += 0x4
     return True
 
