@@ -1,9 +1,7 @@
 #!/usr/bin/python3
 
-import sys
 from elftools.elf.elffile import ELFFile
 import glob
-import binascii
 import subprocess
 from enum import Enum
 import struct
