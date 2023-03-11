@@ -262,7 +262,7 @@ def process():
         rs1 = extractBits(instruction, 19, 15)
         rs2 = extractBits(instruction, 24, 20)
         imm = extractBits(
-            instruction, 31, 30) << 12 | extractBits(instruction, 30, 25) << 5 | extractBits(instruction, 11, 8) << 1 | extractBits(instruction, 8, 7) << 11
+            instruction, 32, 31) << 12 | extractBits(instruction, 30, 25) << 5 | extractBits(instruction, 11, 8) << 1 | extractBits(instruction, 8, 7) << 11
         offset = sign_extend(imm, 13)
         cond = False
         if (funct3 == FUNCT3.BEQ):
