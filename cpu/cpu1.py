@@ -164,6 +164,7 @@ def process():
         funct3 = FUNCT3(extractBits(instruction, 14, 12))
         rs1 = extractBits(instruction, 19, 15)
         imm = extractBits(instruction, 31, 20)
+        funct7 = extractBits(instruction, 31, 25)
         value = sign_extend(imm, 12)
         if (funct3 == FUNCT3.ADDI):
             regfile[rd] = regfile[rs1] + value
@@ -182,18 +183,24 @@ def process():
             #     regfile[rd] = 0
             print("sltiu")
         elif (funct3 == FUNCT3.ANDI):
-            print("andi")
+            regfile[rd] = regfile[rs1] & value
         elif (funct3 == FUNCT3.ORI):
-            print("ori")
+            regfile[rd] = regfile[rs1] | value
         elif (funct3 == FUNCT3.XORI):
-            print("xori")
-        elif (funct3 == FUNCT3.SLLI):
+            regfile[rd] = regfile[rs1] ^ value
+        elif (funct3 == FUNCT3.SLLI and funct7 == 0b0000000):
             shamt = extractBits(instruction, 24, 20)
             regfile[rd] = regfile[rs1] << shamt
-        elif (funct3 == FUNCT3.SRLI):
-            print("srli")
-        elif (funct3 == FUNCT3.SRAI):
-            print("srai")
+        elif (funct3 == FUNCT3.SRLI and funct7 == 0b0000000):
+            # zero extend (logical right shift)
+            shamt = extractBits(instruction, 24, 20)
+            regfile[rd] = regfile[rs1] >> shamt
+        elif (funct3 == FUNCT3.SRAI and funct7 == 0b0100000):
+            shamt = extractBits(instruction, 24, 20)
+            # sign-extend (arithmetic right shift)
+            sb = regfile[rs1] >> 31
+            regfile[rd] = regfile[rs1] >> shamt
+            regfile[rd] |= (0xffffffff * sb) << (32 - shamt)
         else:
             raise Exception("write funct3 %r" % funct3)
 
@@ -206,9 +213,16 @@ def process():
         if (funct3 == FUNCT3.ADD and funct7 == 0b0000000):
             regfile[rd] = regfile[rs1] + regfile[rs2]
         elif (funct3 == FUNCT3.SLT and funct7 == 0b0000000):
+            if (sign_extend(regfile[rs1]) < sign_extend(regfile[rs2])):
+                regfile[rd] = 1
+            else:
+                regfile[rd] = 0
             print("slt")
         elif (funct3 == FUNCT3.SLTU and funct7 == 0b0000000):
-            print("sltu")
+            if (regfile[rs1] < regfile[rs2]):
+                regfile[rd] = 1
+            else:
+                regfile[rd] = 0
         elif (funct3 == FUNCT3.AND and funct7 == 0b0000000):
             print("and")
         elif (funct3 == FUNCT3.OR and funct7 == 0b0000000):
@@ -233,7 +247,9 @@ def process():
         funct12 = extractBits(instruction, 31, 20)
         trap_ret = extractBits(instruction, 31, 25)
         if (funct3 == FUNCT3.ECALL and funct12 == 0x0):
-            print("ecall")
+            if (regfile[3] > 1):
+                print("     ecall", regfile[3])
+                raise Exception("Test failed")
         elif (funct3 == FUNCT3.EBREAK and funct12 == 0x1):
             print("ebreak")
         elif (funct3 == FUNCT3.CSRRW):
@@ -296,6 +312,8 @@ def process():
         constant = imm << 12
         regfile[rd] = constant
 
+    elif (opcode == OP.MISC_MEM):
+        print("misc-mem")
     else:
         dump()
         raise Exception("write opcode %r" % opcode)
@@ -313,7 +331,7 @@ def extractBits(instruction, start, end):
 
 
 def main():
-    for x in glob.glob("/home/adam/dev/riscv-tests/isa/rv32ui-p-add"):
+    for x in glob.glob("/home/adam/dev/riscv-tests/isa/rv32ui-p-lui"):
         if (x.endswith('.dump')):
             continue
         with open(x, 'rb') as f:
@@ -328,10 +346,6 @@ def main():
             regfile[PC] = 0x80000000
             instrcnt = 0
 
-            # -------------------------------
-            # Playground
-            # -------------------------------
-            # -------------------------------
             while process():
                 instrcnt += 1
             print("run %d instructions" % instrcnt)
