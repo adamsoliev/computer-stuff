@@ -314,6 +314,29 @@ def process():
 
     elif (opcode == OP.MISC_MEM):
         print("misc-mem")
+    elif (opcode == OP.LOAD):
+        # I-type instruction
+        rd = extractBits(instruction, 11, 7)
+        funct3 = FUNCT3(extractBits(instruction, 14, 12))
+        rs1 = extractBits(instruction, 19, 15)
+        imm = extractBits(instruction, 31, 20)
+        value = sign_extend(imm, 12)
+        addr = regfile[rs1] + value
+        # value = sign_extend(imm, 12)
+        if (funct3 == FUNCT3.LB):
+            regfile[rd] = sign_extend(fetch(addr) & 0xff, 8)
+        elif (funct3 == FUNCT3.LBU):
+            regfile[rd] = fetch(addr) & 0xff
+        elif (funct3 == FUNCT3.LH):
+            regfile[rd] = sign_extend(fetch(addr) & 0xffff, 16)
+        elif (funct3 == FUNCT3.LHU):
+            regfile[rd] = fetch(addr) & 0xffff
+        elif (funct3 == FUNCT3.LW):
+            regfile[rd] = fetch(addr)
+        else:
+            raise Exception("write funct3 %r" % funct3)
+    elif (opcode == OP.STORE):
+        print("store")
     else:
         dump()
         raise Exception("write opcode %r" % opcode)
@@ -321,7 +344,7 @@ def process():
     print("{:<12} {:<12} {:<10}".format(
         hex(regfile[PC]), hex(instruction), opcode))
 
-    dump()
+    # dump()
     regfile[PC] += 0x4
     return True
 
@@ -331,7 +354,7 @@ def extractBits(instruction, start, end):
 
 
 def main():
-    for x in glob.glob("/home/adam/dev/riscv-tests/isa/rv32ui-p-lui"):
+    for x in glob.glob("/home/adam/dev/riscv-tests/isa/rv32ui-p-lb"):
         if (x.endswith('.dump')):
             continue
         with open(x, 'rb') as f:
