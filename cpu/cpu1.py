@@ -153,10 +153,13 @@ def process():
 
     if (opcode == OP.JAL):
         # J-type instruction
+        rd = extractBits(instruction, 11, 7)
         imm = extractBits(instruction, 32, 31) << 20 | extractBits(instruction, 30, 21) << 1 | extractBits(
             instruction, 21, 20) << 11 | extractBits(instruction, 19, 12) << 12
         offset = sign_extend(imm, 21)
+        regfile[rd] = regfile[PC] + 0x4
         regfile[PC] += offset
+        return True
 
     elif (opcode == OP.OP_IMM):
         # I-type or R-type
@@ -217,24 +220,25 @@ def process():
                 regfile[rd] = 1
             else:
                 regfile[rd] = 0
-            print("slt")
         elif (funct3 == FUNCT3.SLTU and funct7 == 0b0000000):
             if (regfile[rs1] < regfile[rs2]):
                 regfile[rd] = 1
             else:
                 regfile[rd] = 0
         elif (funct3 == FUNCT3.AND and funct7 == 0b0000000):
-            print("and")
+            regfile[rd] = regfile[rs1] & regfile[rs2]
         elif (funct3 == FUNCT3.OR and funct7 == 0b0000000):
-            print("or")
+            regfile[rd] = regfile[rs1] | regfile[rs2]
         elif (funct3 == FUNCT3.XOR and funct7 == 0b0000000):
-            print("xor")
+            regfile[rd] = regfile[rs1] ^ regfile[rs2]
         elif (funct3 == FUNCT3.SLL and funct7 == 0b0000000):
-            print("sll")
+            shift = regfile[rs2] & 0x1f
+            regfile[rd] = regfile[rs1] << shift
         elif (funct3 == FUNCT3.SRL and funct7 == 0b0000000):
-            print("srl")
+            shift = regfile[rs2] & 0x1f
+            regfile[rd] = regfile[rs1] >> shift
         elif (funct3 == FUNCT3.SUB and funct7 == 0b0100000):
-            print("sub")
+            regfile[rd] = regfile[rs1] - regfile[rs2]
         elif (funct3 == FUNCT3.SRA and funct7 == 0b0100000):
             # sign-extend (arithmetic right shift)
             shift = regfile[rs2] & 0x1f
@@ -361,7 +365,7 @@ def extractBits(instruction, start, end):
 
 
 def main():
-    for x in glob.glob("/home/adam/dev/riscv-tests/isa/rv32ui-p-sra"):
+    for x in glob.glob("/home/adam/dev/riscv-tests/isa/rv32ui-p-jal"):
         if (x.endswith('.dump')):
             continue
         with open(x, 'rb') as f:
