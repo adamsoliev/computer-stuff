@@ -236,7 +236,11 @@ def process():
         elif (funct3 == FUNCT3.SUB and funct7 == 0b0100000):
             print("sub")
         elif (funct3 == FUNCT3.SRA and funct7 == 0b0100000):
-            print("sra")
+            # sign-extend (arithmetic right shift)
+            shift = regfile[rs2] & 0x1f
+            sb = regfile[rs1] >> 31
+            regfile[rd] = regfile[rs1] >> shift
+            regfile[rd] |= (0xffffffff * sb) << (32 - shift)
         else:
             raise Exception("write %r %r %r" % (opcode, funct3, hex(funct12)))
 
@@ -314,6 +318,7 @@ def process():
 
     elif (opcode == OP.MISC_MEM):
         print("misc-mem")
+
     elif (opcode == OP.LOAD):
         # I-type instruction
         rd = extractBits(instruction, 11, 7)
@@ -335,8 +340,10 @@ def process():
             regfile[rd] = fetch(addr)
         else:
             raise Exception("write funct3 %r" % funct3)
+
     elif (opcode == OP.STORE):
         print("store")
+
     else:
         dump()
         raise Exception("write opcode %r" % opcode)
@@ -344,7 +351,7 @@ def process():
     print("{:<12} {:<12} {:<10}".format(
         hex(regfile[PC]), hex(instruction), opcode))
 
-    # dump()
+    dump()
     regfile[PC] += 0x4
     return True
 
@@ -354,7 +361,7 @@ def extractBits(instruction, start, end):
 
 
 def main():
-    for x in glob.glob("/home/adam/dev/riscv-tests/isa/rv32ui-p-lb"):
+    for x in glob.glob("/home/adam/dev/riscv-tests/isa/rv32ui-p-sra"):
         if (x.endswith('.dump')):
             continue
         with open(x, 'rb') as f:
